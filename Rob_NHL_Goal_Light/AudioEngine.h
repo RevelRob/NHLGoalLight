@@ -1,6 +1,10 @@
-#pragma once
-#include <Arduino.h>
-#include <DFRobot_DF1201S.h>
+#if __has_include(<DFRobot_DF1201S.h>)
+  #include <DFRobot_DF1201S.h>
+  #define HAS_DFPLAYER_LIB 1
+#else
+  #define HAS_DFPLAYER_LIB 0
+#endif
+
 #include "Config.h"
 
 // 6 volume presets (0 = Mute, 5 = Max 30)
@@ -17,7 +21,9 @@ enum SoundTrack {
 class AudioEngine {
 private:
   HardwareSerial dfSerial;
+#if HAS_DFPLAYER_LIB
   DFRobot_DF1201S dfplayer;
+#endif
   bool connected;
   uint8_t volumeIndex;
 
@@ -25,6 +31,7 @@ public:
   AudioEngine() : dfSerial(1), connected(false), volumeIndex(DEFAULT_VOLUME_IDX) {}
 
   void begin() {
+#if HAS_DFPLAYER_LIB
     Serial.println("[Audio] Initializing DFPlayer Pro UART...");
     
     // Begin hardware serial with specified pins
@@ -42,6 +49,10 @@ public:
     dfplayer.switchFunction(dfplayer.MUSIC);
     dfplayer.setPlayMode(dfplayer.SINGLE);
     setVolumeIndex(volumeIndex);
+#else
+    Serial.println("[Audio] DFRobot_DF1201S library not installed. Running in silent/light-only mode.");
+    connected = false;
+#endif
   }
 
   bool isConnected() const { return connected; }
@@ -49,17 +60,20 @@ public:
   void setVolumeIndex(uint8_t idx) {
     if (idx > 5) idx = 3;
     volumeIndex = idx;
+#if HAS_DFPLAYER_LIB
     if (connected) {
       int vol = VOLUME_LEVELS[volumeIndex];
       dfplayer.setVol(vol);
       Serial.print("[Audio] Volume set to: ");
       Serial.println(vol);
     }
+#endif
   }
 
   uint8_t getVolumeIndex() const { return volumeIndex; }
 
   void play(SoundTrack track) {
+#if HAS_DFPLAYER_LIB
     if (!connected) return;
     int vol = VOLUME_LEVELS[volumeIndex];
     if (vol == 0) return; // Muted
@@ -67,11 +81,14 @@ public:
     Serial.print("[Audio] Playing track: ");
     Serial.println(track);
     dfplayer.playFileNum(track);
+#endif
   }
 
   void stop() {
+#if HAS_DFPLAYER_LIB
     if (connected) {
       dfplayer.pause();
     }
+#endif
   }
 };
