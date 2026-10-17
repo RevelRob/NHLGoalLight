@@ -4,6 +4,7 @@
 #include <WebServer.h>
 #include <DNSServer.h>
 #include <Preferences.h>
+#include <Update.h>
 
 #include "Config.h"
 #include "Teams.h"
@@ -51,10 +52,20 @@ void triggerGameWin();
 // =====================================================
 void setup() {
   Serial.begin(115200);
-  delay(1000);
+  // Wait up to 2.5s for native USB Serial to connect
+  unsigned long serialWait = millis();
+  while (!Serial && (millis() - serialWait < 2500));
+  delay(100);
+
   Serial.println("\n=================================");
-  Serial.println("🚨 Rob's NHL Goal Light Initializing");
+  Serial.println("🚨 NHL Goal Light Initializing");
+  Serial.printf("📦 Firmware Version: %s\n", FIRMWARE_VERSION);
   Serial.println("=================================");
+
+#ifdef PIN_STATUS_LED
+  pinMode(PIN_STATUS_LED, OUTPUT);
+  digitalWrite(PIN_STATUS_LED, LOW); // Turn on built-in blue LED (active LOW)
+#endif
 
   pinMode(PIN_BUTTON, INPUT_PULLUP);
 
@@ -216,16 +227,27 @@ void handleButton(unsigned long now) {
 // NETWORK & WEB SERVER
 // =====================================================
 void setupNetwork() {
+  WiFi.disconnect(true);
+  delay(100);
+
   if (isApMode || strlen(config.wifi_ssid) == 0) {
     isApMode = true;
     Serial.println("[Network] Starting Access Point: " AP_SSID);
     WiFi.mode(WIFI_AP);
-    WiFi.softAP(AP_SSID, AP_PASSWORD);
 
-    dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
+    IPAddress apIP(192, 168, 4, 1);
+    IPAddress netMsk(255, 255, 255, 0);
+    WiFi.softAPConfig(apIP, apIP, netMsk);
+    WiFi.softAP(AP_SSID); // Open AP for instant smartphone/PC connection
+
+    delay(200);
+    dnsServer.start(DNS_PORT, "*", apIP);
     Serial.print("[Network] AP IP address: ");
     Serial.println(WiFi.softAPIP());
     leds.setMode(LED_AP_CONFIG);
+#ifdef PIN_STATUS_LED
+    digitalWrite(PIN_STATUS_LED, LOW); // Blue LED ON in AP mode
+#endif
   } else {
     Serial.printf("[Network] Connecting to Wi-Fi '%s'...\n", config.wifi_ssid);
     WiFi.mode(WIFI_STA);
@@ -233,9 +255,12 @@ void setupNetwork() {
     WiFi.begin(config.wifi_ssid, config.wifi_pass);
 
     unsigned long startAttempt = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 12000) {
+    while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 10000) {
       delay(200);
       Serial.print(".");
+#ifdef PIN_STATUS_LED
+      digitalWrite(PIN_STATUS_LED, !digitalRead(PIN_STATUS_LED)); // Blink while connecting
+#endif
     }
 
     if (WiFi.status() == WL_CONNECTED) {
@@ -247,6 +272,9 @@ void setupNetwork() {
         Serial.println("[Network] mDNS responder started: http://" MDNS_HOSTNAME ".local");
       }
       leds.setMode(LED_IDLE_BREATHE);
+#ifdef PIN_STATUS_LED
+      digitalWrite(PIN_STATUS_LED, HIGH); // Blue LED OFF when connected online
+#endif
     } else {
       Serial.println("\n[Network] Wi-Fi Connection failed. Falling back to AP Mode.");
       isApMode = true;
@@ -354,7 +382,8 @@ void setupWebServer() {
     json += "\"system\":{";
     json += "\"connected\":" + String(WiFi.status() == WL_CONNECTED ? "true" : "false") + ",";
     json += "\"team\":\"" + String(config.primary_team) + "\",";
-    json += "\"freeHeap\":" + String(ESP.getFreeHeap());
+    json += "\"freeHeap\":" + String(ESP.getFreeHeap()) + ",";
+    json += "\"version\":\"" + String(FIRMWARE_VERSION) + "\"";
     json += "},";
     json += "\"game\":{";
     json += "\"state\":\"" + String(gs.state == STATE_LIVE ? "LIVE" : (gs.state == STATE_FINAL ? "FINAL" : "IDLE")) + "\",";
@@ -364,6 +393,32 @@ void setupWebServer() {
     json += "\"awayScore\":" + String(gs.awayScore);
     json += "}}";
     server.send(200, "application/json", json);
+  });
+
+  // REST API: OTA Firmware Update
+  server.on("/api/update", HTTP_POST, []() {
+    server.sendHeader("Connection", "close");
+    server.send(200, "application/json", Update.hasError() ? "{\"success\":false,\"error\":\"Update failed\"}" : "{\"success\":true}");
+    delay(500);
+    ESP.restart();
+  }, []() {
+    HTTPUpload& upload = server.upload();
+    if (upload.status == UPLOAD_FILE_START) {
+      Serial.printf("[OTA] Update started: %s\n", upload.filename.c_str());
+      if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+        Update.printError(Serial);
+      }
+    } else if (upload.status == UPLOAD_FILE_WRITE) {
+      if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+        Update.printError(Serial);
+      }
+    } else if (upload.status == UPLOAD_FILE_END) {
+      if (Update.end(true)) {
+        Serial.printf("[OTA] Update Success: %u bytes\n", upload.totalSize);
+      } else {
+        Update.printError(Serial);
+      }
+    }
   });
 
   // Captive portal fallback

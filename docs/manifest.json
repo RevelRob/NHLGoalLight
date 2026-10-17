@@ -1,5 +1,5 @@
 {
-  "name": "Rob's NHL Goal Light",
+  "name": "NHL Goal Light",
   "version": "1.0.0",
   "home_assistant_domain": "esphome",
   "new_install_prompt_erase": true,

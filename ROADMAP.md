@@ -1,6 +1,6 @@
 # Project Roadmap & Future Enhancements
 
-This document outlines the phased development roadmap for **Rob's NHL Goal Light**, detailing immediate milestones, the planned round display integration, and smart home connectivity.
+This document outlines the phased development roadmap for **NHL Goal Light**, detailing immediate milestones, the planned round display integration, and smart home connectivity.
 
 ---
 
@@ -9,10 +9,10 @@ This document outlines the phased development roadmap for **Rob's NHL Goal Light
 ```mermaid
 timeline
     title Project Evolution
-    Phase 1 : Core Goal Light : Web Config Portal : Adaptive NHL API Polling : WS2812B NeoPixel Beacon : DFPlayer Audio Horn
+    Phase 1 : Core Goal Light : Web Config Portal : Adaptive NHL API Polling : WS2812B NeoPixel Beacon : DFPlayer Audio Horn : OTA Web Updater
     Phase 2 : Multi-Event Engine : Power Play / Situation Code Alerts : Period Horns : Victory Celebration : Night Mode
     Phase 3 : Round LCD Display (GC9A01) : Team Logos & Matchup Screen : Live Game Clock : Scorer & Assist Graphics
-    Phase 4 : Smart Home Ecosystem : Home Assistant MQTT Integration : Sync with Living Room Hue Lights : Mobile Push Alerts
+    Phase 4 : Web Flasher CI/CD : Universal ESP32 Compatibility : Home Assistant MQTT Integration : Sync with Living Room Hue Lights
 ```
 
 ---
@@ -20,17 +20,19 @@ timeline
 ## 📍 Phase 1: Core Goal Light & Web Portal (Current Milestone)
 
 - [x] Architectural design, hardware specifications, and API documentation.
-- [ ] ESP32 core firmware setup (Arduino / PlatformIO).
-- [ ] Wi-Fi Manager with captive portal fallback (`NHL-Goal-Light-Setup` AP mode).
-- [ ] Embedded web configuration portal (`http://goallight.local`):
+- [x] ESP32 core firmware setup (Arduino IDE / PlatformIO compatible).
+- [x] Wi-Fi Manager with captive portal fallback (`NHL-Goal-Light-Setup` AP mode on `192.168.4.1`).
+- [x] Embedded responsive dark-mode web portal (`http://goallight.local`):
   - 32-team selector with automated team colors.
-  - Brightness and volume sliders.
-  - Effect style selector (Beacon, Arena Strobe, Team Breath).
-  - Web-based test buttons (Test Horn & Test Lights).
-- [ ] Adaptive NHL API polling client (`/club-schedule` & `/boxscore`).
-- [ ] Non-blocking WS2812B animation engine.
-- [ ] DFRobot DFPlayer Pro (DF1201S) hardware serial audio driver.
-- [ ] Physical button debouncer (Single press = Volume cycle, Double press = Test goal horn, Long press = Force AP mode).
+  - Brightness, effect style (Beacon, Arena Strobe, Team Breath), and duration controls.
+  - Sound controls with test buttons.
+  - Custom SVG Goal Light tab icon (favicon).
+  - **Over-The-Air (OTA) Web Firmware Updater (`/api/update`)** with real-time percentage progress bar.
+  - **Live GitHub Release Checker**: Queries `api.github.com` directly from the browser to check for new updates with release notes.
+- [x] Adaptive NHL API polling client (`/club-schedule` & `/boxscore`).
+- [x] Non-blocking WS2812B animation engine.
+- [x] Hardware Serial DFPlayer Pro (DF1201S) driver with fallback to silent/light-only testing.
+- [x] Physical button debouncer (Single press = Volume cycle, Double press = Test goal horn, Long press = Force AP mode).
 
 ---
 
@@ -75,11 +77,18 @@ Integration of a circular IPS LCD flush-mounted on the front face of the 3D-prin
 
 ---
 
-## 📍 Phase 4: Smart Home & Browser Web Flasher
+## 📍 Phase 4: Web Flasher CI/CD & Universal Multi-Device Ecosystem
 
-- [ ] **Zero-Code Web Flasher (GitHub Pages)**:
-  - 1-click browser flasher using **ESP Web Tools** via Web Serial API.
-  - Flash firmware and configure Wi-Fi directly in Chrome/Edge without installing Arduino IDE or PlatformIO. See [WEB_FLASHER_GUIDE.md](file:///Users/robtesta/Documents/Arduino/NHL%20Goal%20Light%2010.2026/Rob%20NHL%20Goal%20Light/WEB_FLASHER_GUIDE.md).
+- [ ] **Automated GitHub Actions Firmware Builds for Web Flasher**:
+  - Automatically compiles `.bin` assets on every release: `bootloader.bin`, `partitions.bin`, `firmware.bin`, and merged single-file binary.
+  - Automatically commits or deploys binaries to GitHub Pages (`docs/builds/`) so users can flash in 1-click via the Web Serial Flasher in Chrome/Edge.
+- [ ] **Universal Multi-ESP32 Device Compatibility Layer**:
+  - Pre-mapped pin profiles and build configurations for:
+    - **ESP32-S3 Super Mini** (ultra-compact base builds)
+    - **Seeed Studio XIAO ESP32-S3 / C3**
+    - **Standard ESP32-WROOM-32 DevKit** (30-pin & 38-pin)
+    - **ESP32-S2 / ESP32-C6**
+  - Pin-mapping header abstraction with compile-time or web-configurable pin assignment.
 - [ ] **Home Assistant Integration**:
   - Auto-discovery via MQTT (`homeassistant/light/goal_light/config`).
   - Native Home Assistant entities:

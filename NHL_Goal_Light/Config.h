@@ -1,12 +1,16 @@
 #pragma once
 #include <Arduino.h>
 
+#define FIRMWARE_VERSION     "1.0.0"
+#define GITHUB_REPO          "RevelRob/NHLGoalLight"
+
 // =====================================================
 // PIN DEFINITIONS - Tailored for ESP32-S3 Super Mini
 // =====================================================
 
 #if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(ARDUINO_ESP32S3_DEV)
   // ESP32-S3 Super Mini Default Pinout
+  #define PIN_STATUS_LED   8   // Built-in blue LED on Super Mini (active LOW)
   #define PIN_NEOPIXEL     4   // GPIO 4 -> NeoPixel DIN (via 330 ohm resistor)
   #define PIN_BUTTON       9   // GPIO 9 -> Tactile Switch to GND (INPUT_PULLUP)
   #define PIN_DFPLAYER_TX  1   // GPIO 1 -> DFPlayer RX (ESP32 TX)

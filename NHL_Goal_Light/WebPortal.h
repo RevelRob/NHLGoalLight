@@ -12,6 +12,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NHL Goal Light</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%23111' stroke='%23333' stroke-width='4'/%3E%3Ccircle cx='50' cy='50' r='38' fill='%23d90429'/%3E%3Cpath d='M25 50h50M50 25v50' stroke='%23fff' stroke-width='8' stroke-linecap='round'/%3E%3Ccircle cx='50' cy='50' r='18' fill='%23fff'/%3E%3Ccircle cx='50' cy='50' r='10' fill='%23d90429'/%3E%3C/svg%3E">
   <style>
     :root {
       --bg: #0d1117;
@@ -252,6 +253,28 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       </div>
     </div>
 
+    <!-- Firmware & Updates -->
+    <div class="card">
+      <h2>🔄 Firmware & Updates</h2>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <span style="font-size:0.85rem; color:var(--text-muted)">Current Version: <strong id="curVer" style="color:var(--text)">v1.0.0</strong></span>
+        <button id="btnCheckUpdate" style="padding:6px 12px; font-size:0.8rem; background:var(--btn-bg); border:1px solid var(--border); color:var(--text); border-radius:8px; cursor:pointer;">🔍 Check GitHub</button>
+      </div>
+      <div id="updateInfo" style="display:none; padding:10px; border-radius:8px; background:rgba(46,160,67,0.15); border:1px solid var(--success); margin-bottom:12px; font-size:0.82rem; line-height:1.4;"></div>
+      
+      <div class="form-group" style="margin-bottom:8px;">
+        <label for="otaFile">Manual OTA Firmware Upload (.bin)</label>
+        <input type="file" id="otaFile" accept=".bin" style="font-size:0.8rem; padding:8px 0; color:var(--text-muted);">
+      </div>
+      <button id="btnOtaUpload" style="width:100%; padding:10px; background:#1f6feb; border:none; border-radius:8px; color:white; font-weight:600; cursor:pointer; display:none;">⚡ Install Firmware Update</button>
+      <div id="otaProgress" style="display:none; margin-top:8px;">
+        <div style="background:var(--border); border-radius:6px; height:12px; overflow:hidden;">
+          <div id="otaBar" style="background:#1f6feb; height:100%; width:0%; transition:width 0.2s;"></div>
+        </div>
+        <div id="otaText" style="font-size:0.75rem; color:var(--text-muted); text-align:center; margin-top:4px;">Uploading: 0%</div>
+      </div>
+    </div>
+
     <button id="btnSave" class="primary" style="padding: 16px; font-size: 1rem;">💾 Save & Apply Settings</button>
     <div id="statusToast" class="status-toast"></div>
   </div>
@@ -332,6 +355,9 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             badge.className = 'badge';
             badge.textContent = 'AP Setup Mode';
           }
+          if (s.system && s.system.version) {
+            document.getElementById('curVer').textContent = s.system.version;
+          }
         }).catch(() => {});
     }
     setInterval(refreshStatus, 4000);
@@ -371,6 +397,93 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         t.textContent = 'Settings saved successfully!';
         setTimeout(() => t.style.display = 'none', 3000);
       });
+    };
+
+    // Firmware & GitHub Updates
+    const btnCheckUpdate = document.getElementById('btnCheckUpdate');
+    const updateInfo = document.getElementById('updateInfo');
+    const otaFile = document.getElementById('otaFile');
+    const btnOtaUpload = document.getElementById('btnOtaUpload');
+    const otaProgress = document.getElementById('otaProgress');
+    const otaBar = document.getElementById('otaBar');
+    const otaText = document.getElementById('otaText');
+
+    btnCheckUpdate.onclick = () => {
+      btnCheckUpdate.textContent = 'Checking...';
+      fetch('https://api.github.com/repos/RevelRob/NHLGoalLight/releases/latest')
+        .then(r => {
+          if (!r.ok) throw new Error('No releases found');
+          return r.json();
+        })
+        .then(rel => {
+          btnCheckUpdate.textContent = '🔍 Check GitHub';
+          const latestTag = rel.tag_name || rel.name;
+          const currentTag = document.getElementById('curVer').textContent;
+          updateInfo.style.display = 'block';
+          if (latestTag !== currentTag && latestTag) {
+            updateInfo.style.borderColor = '#e63946';
+            updateInfo.style.background = 'rgba(230,57,70,0.15)';
+            updateInfo.innerHTML = `<strong>✨ Update Available: ${latestTag}</strong><br>` +
+              `Release notes: ${rel.body ? rel.body.substring(0, 100) : 'New improvements'}<br>` +
+              `<a href="${rel.html_url}" target="_blank" style="color:#58a6ff; text-decoration:underline; display:inline-block; margin-top:6px;">View on GitHub / Download .bin</a>`;
+          } else {
+            updateInfo.style.borderColor = 'var(--success)';
+            updateInfo.style.background = 'rgba(46,160,67,0.15)';
+            updateInfo.innerHTML = `<strong>✅ Firmware Up to Date (${currentTag})</strong>`;
+          }
+        })
+        .catch(err => {
+          btnCheckUpdate.textContent = '🔍 Check GitHub';
+          updateInfo.style.display = 'block';
+          updateInfo.style.borderColor = 'var(--border)';
+          updateInfo.style.background = 'rgba(255,255,255,0.05)';
+          updateInfo.innerHTML = `No releases published yet on GitHub. Check <a href="https://github.com/RevelRob/NHLGoalLight" target="_blank" style="color:#58a6ff;">RevelRob/NHLGoalLight</a>.`;
+        });
+    };
+
+    otaFile.onchange = () => {
+      btnOtaUpload.style.display = otaFile.files.length > 0 ? 'block' : 'none';
+    };
+
+    btnOtaUpload.onclick = () => {
+      const file = otaFile.files[0];
+      if (!file) return;
+      if (!confirm(`Flash ${file.name}? The goal light will reboot after installation.`)) return;
+
+      const formData = new FormData();
+      formData.append('update', file);
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/update', true);
+
+      otaProgress.style.display = 'block';
+      btnOtaUpload.disabled = true;
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          otaBar.style.width = pct + '%';
+          otaText.textContent = `Installing: ${pct}%`;
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status === 200) {
+          otaText.textContent = '✅ Update complete! Rebooting device in 10s...';
+          otaBar.style.background = 'var(--success)';
+          setTimeout(() => window.location.reload(), 10000);
+        } else {
+          otaText.textContent = '❌ Update failed: ' + xhr.responseText;
+          otaBar.style.background = '#e63946';
+          btnOtaUpload.disabled = false;
+        }
+      };
+
+      xhr.onerror = () => {
+        otaText.textContent = '❌ Upload error or connection lost.';
+        btnOtaUpload.disabled = false;
+      };
+
+      xhr.send(formData);
     };
   </script>
 </body>
