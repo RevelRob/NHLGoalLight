@@ -1,0 +1,96 @@
+{
+  "version": "1.0.0",
+  "updatedAt": "2026-10-16T15:00:00Z",
+  "baseUrl": "https://raw.githubusercontent.com/username/nhl-goal-light-assets/main",
+  "common": {
+    "sounds": {
+      "game_start": {
+        "url": "/common/sounds/game_start.mp3",
+        "description": "Arena air-raid siren / buzzer on puck drop",
+        "sizeBytes": 94200
+      },
+      "period_end": {
+        "url": "/common/sounds/period_end.mp3",
+        "description": "Period buzzer on intermission",
+        "sizeBytes": 65400
+      },
+      "win_fanfare": {
+        "url": "/common/sounds/win_fanfare.mp3",
+        "description": "Arena victory song / horn sequence",
+        "sizeBytes": 184500
+      },
+      "test_horn": {
+        "url": "/common/sounds/test_horn.mp3",
+        "description": "Short test sample",
+        "sizeBytes": 48100
+      }
+    },
+    "graphics": {
+      "nhl_shield": {
+        "url": "/common/graphics/nhl_shield_240.bin",
+        "dimensions": "240x240",
+        "format": "RGB565",
+        "sizeBytes": 115200
+      },
+      "puck": {
+        "url": "/common/graphics/puck_240.bin",
+        "dimensions": "240x240",
+        "format": "RGB565",
+        "sizeBytes": 115200
+      }
+    }
+  },
+  "teams": {
+    "NYR": {
+      "name": "New York Rangers",
+      "version": "1.0.0",
+      "primaryColor": "#0038A8",
+      "secondaryColor": "#CE1126",
+      "horn": {
+        "url": "/teams/NYR/sounds/goal_horn.mp3",
+        "description": "Madison Square Garden Fire Horn + Slapshot Song",
+        "sizeBytes": 210400
+      },
+      "logo": {
+        "url": "/teams/NYR/graphics/logo_240.bin",
+        "dimensions": "240x240",
+        "format": "RGB565",
+        "sizeBytes": 115200
+      }
+    },
+    "BOS": {
+      "name": "Boston Bruins",
+      "version": "1.0.0",
+      "primaryColor": "#FFB81C",
+      "secondaryColor": "#000000",
+      "horn": {
+        "url": "/teams/BOS/sounds/goal_horn.mp3",
+        "description": "TD Garden Kahlenberg horn + Zombie Nation",
+        "sizeBytes": 195200
+      },
+      "logo": {
+        "url": "/teams/BOS/graphics/logo_240.bin",
+        "dimensions": "240x240",
+        "format": "RGB565",
+        "sizeBytes": 115200
+      }
+    },
+    "VGK": {
+      "name": "Vegas Golden Knights",
+      "version": "1.0.0",
+      "primaryColor": "#B4975A",
+      "secondaryColor": "#333F48",
+      "horn": {
+        "url": "/teams/VGK/sounds/goal_horn.mp3",
+        "description": "T-Mobile Arena siren + Vegas horn",
+        "sizeBytes": 204800
+      },
+      "logo": {
+        "url": "/teams/VGK/graphics/logo_240.bin",
+        "dimensions": "240x240",
+        "format": "RGB565",
+        "sizeBytes": 115200
+      }
+    }
+  }
+}

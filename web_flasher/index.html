@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flash Rob's NHL Goal Light</title>
+  <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card: #161b22;
+      --border: #30363d;
+      --accent: #e63946;
+      --text: #f0f6fc;
+      --muted: #8b949e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 36px 28px;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.6);
+    }
+    .badge {
+      display: inline-block;
+      font-size: 0.8rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: rgba(230, 57, 70, 0.15);
+      color: var(--accent);
+      margin-bottom: 12px;
+      border: 1px solid rgba(230, 57, 70, 0.3);
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 1.8rem;
+      letter-spacing: -0.5px;
+    }
+    p {
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 0.95rem;
+      margin-bottom: 24px;
+    }
+    .steps {
+      text-align: left;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+      font-size: 0.88rem;
+    }
+    .steps ol { margin-left: 18px; }
+    .steps li { margin-bottom: 8px; color: #c9d1d9; }
+    .steps li:last-child { margin-bottom: 0; }
+    .button-container {
+      margin-top: 10px;
+    }
+    button.flash-btn {
+      padding: 14px 28px;
+      font-size: 1rem;
+      font-weight: 700;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 14px rgba(230, 57, 70, 0.4);
+    }
+    button.flash-btn:hover {
+      opacity: 0.92;
+      transform: translateY(-1px);
+    }
+    .warning {
+      color: #e3b341;
+      font-size: 0.8rem;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">ESP32-S3 SUPER MINI</div>
+    <h1>🚨 Rob's NHL Goal Light</h1>
+    <p>Install or update firmware directly from your web browser without installing any developer tools or drivers.</p>
+
+    <div class="steps">
+      <ol>
+        <li>Connect your <strong>ESP32-S3 Super Mini</strong> using a USB-C data cable.</li>
+        <li>Open this page in <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong>.</li>
+        <li>Click <strong>Install Firmware</strong> below and select the serial port.</li>
+        <li>Follow the prompts to connect the device to your Wi-Fi!</li>
+      </ol>
+    </div>
+
+    <div class="button-container">
+      <esp-web-install-button manifest="./manifest.json">
+        <button slot="activate" class="flash-btn">
+          🚀 Install Firmware
+        </button>
+        <span slot="unsupported">
+          ⚠️ Web Serial is not supported in this browser. Please use Chrome, Edge, or Brave on a desktop computer.
+        </span>
+        <span slot="not-allowed">
+          ⚠️ Web Serial requires an HTTPS connection or localhost.
+        </span>
+      </esp-web-install-button>
+    </div>
+
+    <div class="warning">
+      💡 Ensure your USB-C cable supports data transfer (not a power-only charge cable).
+    </div>
+  </div>
+</body>
+</html>
