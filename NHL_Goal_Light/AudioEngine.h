@@ -20,15 +20,19 @@ enum SoundTrack {
 
 class AudioEngine {
 private:
-  HardwareSerial dfSerial;
 #if HAS_DFPLAYER_LIB
+  HardwareSerial dfSerial;
   DFRobot_DF1201S dfplayer;
 #endif
   bool connected;
   uint8_t volumeIndex;
 
 public:
+#if HAS_DFPLAYER_LIB
   AudioEngine() : dfSerial(1), connected(false), volumeIndex(DEFAULT_VOLUME_IDX) {}
+#else
+  AudioEngine() : connected(false), volumeIndex(DEFAULT_VOLUME_IDX) {}
+#endif
 
   void begin() {
 #if HAS_DFPLAYER_LIB
