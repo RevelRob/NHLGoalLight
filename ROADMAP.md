@@ -112,3 +112,36 @@ Integration of a circular IPS LCD flush-mounted on the front face of the 3D-prin
     - `select.preferred_team`: Change team from Home Assistant dashboards.
 - [ ] **Whole-House Goal Sync**: Broadcast MQTT or webhook events so room lights (Philips Hue, LIFX, WLED) flash red in sync with the goal light.
 
+---
+
+## 📍 Multi-Device Ecosystem: ESP-NOW Wireless Mesh & Satellite Goal Light Synchronisation 📡
+
+A peer-to-peer low-latency wireless synchronisation system allowing multiple Goal Lights to celebrate in absolute lockstep across different rooms, floors, or outdoor patios without saturating home Wi-Fi bandwidth.
+
+### Architecture Overview
+
+```mermaid
+graph TD
+    API["🌐 NHL Cloud API"] -->|Wi-Fi HTTP Polling| Master["🚨 Main Goal Light (Master Gateway)<br/>Living Room (http://livingroom-light.local)"]
+    TV["📺 TV Delay Buffer"] --> Master
+    
+    Master -->|Sub-5ms ESP-NOW Broadcast| Sat1["💡 Satellite Beacon 1<br/>Basement Bar (http://bar-light.local)"]
+    Master -->|Sub-5ms ESP-NOW Broadcast| Sat2["💡 Satellite Beacon 2<br/>Garage / Man Cave (http://mancave-beacon.local)"]
+    Master -->|Sub-5ms ESP-NOW Broadcast| Sat3["💡 Satellite Beacon 3<br/>Patio Deck (http://patio-light.local)"]
+```
+
+### Core Features
+
+1. **Master Gateway & Satellite Topology**:
+   - **Main Device (Master)**: Handles internet connectivity, queries NHL API live endpoints, runs the TV Broadcast Delay buffer, and broadcasts high-speed ESP-NOW celebration packets the instant a goal is validated.
+   - **Satellite Units**: Compact, standalone receiver units with their own WS2812B LEDs and DFPlayer audio. They listen on the local radio channel and fire their beacons and horns in lockstep with the Master (< 5ms latency).
+2. **Dynamic Unique `*.local` mDNS Network Addressing**:
+   - Each light derives its local network address dynamically from its custom friendly name (e.g. `"Living Room"` -> `http://living-room.local`, `"Man Cave"` -> `http://man-cave.local`).
+   - Default hardware MAC suffix hashing (e.g. `http://goallight-3a4f.local`) ensures zero mDNS hostname collisions when multiple unconfigured units are powered on the same home network simultaneously.
+3. **Zero-Configuration Auto-Pairing Protocol**:
+   - Satellites discover the Master's operating Wi-Fi channel automatically.
+   - Pairing can be completed with a 1-tap button in the web portal or via physical button press sequence.
+4. **Independent Satellite Profiles**:
+   - Assign per-device audio/lighting roles: e.g. Living Room plays full goal horn + beacon, while a bedroom or upstairs satellite runs silent team colour breathing without waking sleeping children.
+   - Master web portal provides a multi-device management view showing satellite RSSI signal strength, online status, and multi-light test trigger.
+

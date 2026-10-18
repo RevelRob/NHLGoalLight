@@ -54,6 +54,33 @@ void triggerGoalCelebration();
 void triggerOpponentGoal();
 void triggerGameWin();
 
+void generateHostname(const char* name, char* out, size_t maxLen) {
+  if (name == nullptr || strlen(name) == 0 || strcmp(name, "NHL Goal Light") == 0) {
+    uint8_t mac[6];
+    WiFi.macAddress(mac);
+    snprintf(out, maxLen, "%s-%02x%02x", MDNS_HOSTNAME, mac[4], mac[5]);
+    return;
+  }
+  size_t j = 0;
+  for (size_t i = 0; name[i] != '\0' && j < maxLen - 1; i++) {
+    char c = name[i];
+    if (isalnum(c)) {
+      out[j++] = tolower(c);
+    } else if (c == ' ' || c == '_' || c == '-') {
+      if (j > 0 && out[j - 1] != '-') {
+        out[j++] = '-';
+      }
+    }
+  }
+  if (j > 0 && out[j - 1] == '-') j--;
+  out[j] = '\0';
+  if (strlen(out) == 0) {
+    uint8_t mac[6];
+    WiFi.macAddress(mac);
+    snprintf(out, maxLen, "%s-%02x%02x", MDNS_HOSTNAME, mac[4], mac[5]);
+  }
+}
+
 // =====================================================
 // SETUP
 // =====================================================
@@ -89,15 +116,6 @@ void setup() {
 
   // Initialise NHL API Client
   nhl.setTeam(config.primary_team);
-
-  // Check if either external button (GPIO 9) or on-board BOOT button (GPIO 0) is held during boot
-  if (digitalRead(PIN_BUTTON) == LOW || digitalRead(0) == LOW) {
-    Serial.println("[Boot] Button held on power up: Forcing AP setup mode and clearing stored Wi-Fi.");
-    isApMode = true;
-    config.wifi_ssid[0] = '\0';
-    config.wifi_pass[0] = '\0';
-    saveConfiguration();
-  }
 
   // Network Setup
   setupNetwork();
@@ -309,14 +327,19 @@ void setupNetwork() {
   IPAddress apIP(192, 168, 4, 1);
   IPAddress netMsk(255, 255, 255, 0);
 
+  // Derive unique mDNS hostname from device name or MAC address
+  char hostSlug[33];
+  generateHostname(config.device_name, hostSlug, sizeof(hostSlug));
+
   // Set conservative Wi-Fi TX power (11dBm) to prevent voltage drop on compact SuperMini regulator
   WiFi.setTxPower(WIFI_POWER_11dBm);
 
   if (isApMode || strlen(config.wifi_ssid) == 0) {
     isApMode = true;
     Serial.println("[Network] Starting Access Point: " AP_SSID);
-    WiFi.mode(WIFI_AP_STA);
+    WiFi.disconnect(true);
     delay(50);
+    WiFi.mode(WIFI_AP);
     WiFi.softAPConfig(apIP, apIP, netMsk);
     bool apSuccess = false;
     if (strlen(config.ap_password) >= 8) {
@@ -336,23 +359,19 @@ void setupNetwork() {
     digitalWrite(PIN_STATUS_LED, LOW); // Blue LED ON solid in AP mode
 #endif
   } else {
-    Serial.printf("[Network] Starting AP '%s' & connecting to '%s'...\n", AP_SSID, config.wifi_ssid);
-    WiFi.mode(WIFI_AP_STA);
-    delay(50);
-    WiFi.softAPConfig(apIP, apIP, netMsk);
-    if (strlen(config.ap_password) >= 8) {
-      WiFi.softAP(AP_SSID, config.ap_password);
-    } else {
-      WiFi.softAP(AP_SSID);
-    }
-    dnsServer.start(DNS_PORT, "*", apIP);
-
-    WiFi.setHostname(MDNS_HOSTNAME);
+    Serial.printf("[Network] Connecting to Wi-Fi '%s' as '%s.local'...\n", config.wifi_ssid, hostSlug);
+    // CRITICAL: Put radio strictly into Station mode first!
+    // Do NOT run SoftAP simultaneously during initial association, as SoftAP on Channel 1
+    // prevents the ESP32 RF synthesizer from locking onto home APs on other channels.
+    WiFi.disconnect(true);
+    delay(100);
+    WiFi.mode(WIFI_STA);
+    WiFi.setHostname(hostSlug);
     WiFi.begin(config.wifi_ssid, config.wifi_pass);
 
     unsigned long startAttempt = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 12000) {
-      delay(200);
+    while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 16000) {
+      delay(250);
       Serial.print(".");
 #ifdef PIN_STATUS_LED
       digitalWrite(PIN_STATUS_LED, !digitalRead(PIN_STATUS_LED)); // Blink while connecting
@@ -364,26 +383,23 @@ void setupNetwork() {
       Serial.print("[Network] IP Address: ");
       Serial.println(WiFi.localIP());
 
-      // Disable SoftAP once connected so client seamlessly rejoins home network
-      WiFi.softAPdisconnect(true);
-      WiFi.mode(WIFI_STA);
       isApMode = false;
 
-      if (MDNS.begin(MDNS_HOSTNAME)) {
-        Serial.println("[Network] mDNS responder started: http://" MDNS_HOSTNAME ".local");
-        if (strlen(config.device_name) > 0) {
-          MDNS.setInstanceName(config.device_name);
-        }
+      if (MDNS.begin(hostSlug)) {
+        MDNS.setInstanceName(config.device_name);
+        MDNS.addService("http", "tcp", 80);
+        Serial.printf("[Network] mDNS responder started: http://%s.local\n", hostSlug);
       }
       leds.returnToIdle();
 #ifdef PIN_STATUS_LED
       digitalWrite(PIN_STATUS_LED, HIGH); // Blue LED OFF when connected online
 #endif
     } else {
-      Serial.println("\n[Network] Wi-Fi Connection failed. Fallback to Captive Portal (192.168.4.1)...");
+      Serial.printf("\n[Network] Could not connect to '%s'. Starting fallback Captive Portal (192.168.4.1)...\n", config.wifi_ssid);
       isApMode = true;
-      WiFi.mode(WIFI_AP_STA);
+      WiFi.disconnect(true);
       delay(50);
+      WiFi.mode(WIFI_AP);
       WiFi.softAPConfig(apIP, apIP, netMsk);
       if (strlen(config.ap_password) >= 8) {
         WiFi.softAP(AP_SSID, config.ap_password);
@@ -666,7 +682,6 @@ void setupWebServer() {
         if (s.length() > 0) {
           if (strcmp(config.wifi_ssid, s.c_str()) != 0) {
             wifiConfigured = true;
-            config.wifi_pass[0] = '\0';
           }
           strncpy(config.wifi_ssid, s.c_str(), sizeof(config.wifi_ssid));
         }
@@ -690,14 +705,17 @@ void setupWebServer() {
         strncpy(config.ap_password, ap.c_str(), sizeof(config.ap_password));
       }
 
+      Serial.printf("[Config-POST] Wi-Fi SSID: '%s', Pass len: %d, Device: '%s', Team: '%s'\n",
+                    config.wifi_ssid, strlen(config.wifi_pass), config.device_name, config.primary_team);
+
       // Apply runtime configuration
       leds.configure(config);
       saveConfiguration();
 
       bool shouldRestart = (isApMode && strlen(config.wifi_ssid) > 0) || wifiConfigured;
       if (shouldRestart) {
-        scheduledRestartTime = millis() + 1200;
-        Serial.printf("[Config] Wi-Fi settings saved. Rebooting in 1.2s to connect to '%s'...\n", config.wifi_ssid);
+        scheduledRestartTime = millis() + 1500;
+        Serial.printf("[Config] Wi-Fi settings saved. Rebooting in 1.5s to connect to '%s'...\n", config.wifi_ssid);
         server.send(200, "application/json", "{\"success\":true,\"restart\":true}");
       } else {
         server.send(200, "application/json", "{\"success\":true,\"restart\":false}");
@@ -707,14 +725,19 @@ void setupWebServer() {
     server.send(400, "text/plain", "Bad Request");
   });
 
-  // REST API: Test Celebration (supports horn-only, light-only, or both)
+  // REST API: Test Celebration (supports horn-only, light-only, or both, plus live effect override)
   server.on("/api/test", HTTP_POST, []() {
     bool horn = true;
     bool light = true;
+    uint8_t effect = config.effect_style;
     if (server.hasArg("plain")) {
       String body = server.arg("plain");
       if (body.indexOf("\"horn\":false") >= 0) horn = false;
       if (body.indexOf("\"light\":false") >= 0) light = false;
+      int effPos = body.indexOf("\"effect\":");
+      if (effPos >= 0) {
+        effect = (uint8_t)body.substring(effPos + 9).toInt();
+      }
     }
 
     if (horn && config.hw_speaker_enabled) {
@@ -722,7 +745,7 @@ void setupWebServer() {
     }
     if (light && config.hw_lights_enabled) {
       LedMode mode = LED_BEACON_GOAL;
-      switch (config.effect_style) {
+      switch (effect) {
         case 0: mode = LED_BEACON_GOAL; break;
         case 1: mode = LED_STROBE_GOAL; break;
         case 2: mode = LED_BREATHE_CELEBRATE; break;
@@ -738,9 +761,13 @@ void setupWebServer() {
   // REST API: Live Game & System Status
   server.on("/api/status", HTTP_GET, []() {
     const GameStatus &gs = nhl.getStatus();
+    char hostSlug[33];
+    generateHostname(config.device_name, hostSlug, sizeof(hostSlug));
     String json = "{";
     json += "\"system\":{";
     json += "\"connected\":" + String(WiFi.status() == WL_CONNECTED ? "true" : "false") + ",";
+    json += "\"isApMode\":" + String(isApMode ? "true" : "false") + ",";
+    json += "\"hostname\":\"" + String(hostSlug) + ".local\",";
     json += "\"deviceName\":\"" + String(config.device_name) + "\",";
     json += "\"team\":\"" + String(config.primary_team) + "\",";
     json += "\"freeHeap\":" + String(ESP.getFreeHeap()) + ",";

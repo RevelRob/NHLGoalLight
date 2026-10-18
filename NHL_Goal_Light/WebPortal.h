@@ -122,8 +122,11 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       align-items: center;
       gap: 3px;
       transition: all 0.2s ease;
+      touch-action: manipulation;
+      -webkit-user-select: none;
+      user-select: none;
     }
-    .nav-tab .tab-icon { font-size: 1.05rem; }
+    .nav-tab .tab-icon { font-size: 1.05rem; pointer-events: none; }
     .nav-tab.active {
       background: var(--btn-bg);
       color: var(--text);
@@ -697,17 +700,54 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     <!-- ===================================================== -->
     <div id="tab-system" class="tab-page">
       
-      <!-- Device Customisation -->
+      <!-- Wi-Fi Network Setup (Card 1: Top priority in AP mode) -->
+      <div class="card" id="wifiCard">
+        <h2>📶 Wi-Fi Settings</h2>
+        <div class="form-group">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <label style="margin:0;">Select Nearby Network</label>
+            <button type="button" id="btnRescan" style="flex:none; padding:4px 10px; font-size:0.75rem; border-radius:6px; background:var(--btn-bg); border:1px solid var(--border); color:var(--text); cursor:pointer;">🔄 Rescan</button>
+          </div>
+          <select id="wifiSelect">
+            <option value="" disabled selected>🔍 Scanning for Wi-Fi networks...</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="manualSsidGroup">
+          <label for="wifiSsid">Wi-Fi Network Name (SSID)</label>
+          <input type="text" id="wifiSsid" placeholder="Choose above or enter SSID manually" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+          <div class="helper-text">Select your network from the dropdown above or type your SSID directly.</div>
+        </div>
+
+        <div class="form-group">
+          <label for="wifiPass">Wi-Fi Password</label>
+          <div style="position:relative; display:flex; align-items:center;">
+            <input type="password" id="wifiPass" placeholder="Enter Wi-Fi Password" autocomplete="new-password" style="padding-right:42px;">
+            <button type="button" id="btnTogglePass" style="position:absolute; right:4px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1.1rem; padding:4px 8px; flex:none;">👁️</button>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
+          <label for="apPass">Hotspot Password (Optional)</label>
+          <div style="position:relative; display:flex; align-items:center;">
+            <input type="password" id="apPass" placeholder="Leave blank for open network (min 8 chars)" autocomplete="new-password" style="padding-right:42px;">
+            <button type="button" id="btnToggleApPass" style="position:absolute; right:4px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1.1rem; padding:4px 8px; flex:none;">👁️</button>
+          </div>
+          <div class="helper-text">Security password for <strong>NHL-Goal-Light-Setup</strong> Wi-Fi. Leave blank for open access.</div>
+        </div>
+      </div>
+
+      <!-- Device Customisation (Card 2: Below Wi-Fi setup) -->
       <div class="card">
         <h2>🏷️ Device Customisation</h2>
         <div class="form-group">
           <label for="deviceNameInput">Goal Light Name</label>
-          <input type="text" id="deviceNameInput" placeholder="NHL Goal Light" maxlength="32">
-          <div class="helper-text">Custom name displayed across your web portal, home screen icon, and mDNS network.</div>
+          <input type="text" id="deviceNameInput" placeholder="NHL Goal Light" maxlength="32" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false">
+          <div class="helper-text">Custom name displayed across your web portal, home screen icon, and local mDNS address (<code id="lblMdnsUrl" style="color:var(--accent);">http://goallight.local</code>).</div>
         </div>
       </div>
 
-      <!-- Connected Hardware Modules -->
+      <!-- Connected Hardware Modules (Card 3) -->
       <div class="card">
         <h2>🔌 Attached Hardware Modules</h2>
         <div class="helper-text" style="margin-bottom:12px;">Select the components physically attached. Unselected hardware options will be hidden automatically across all pages.</div>
@@ -737,47 +777,11 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         </label>
       </div>
 
-      <!-- Wi-Fi Network Setup -->
-      <div class="card" id="wifiCard">
-        <h2>📶 Wi-Fi Settings</h2>
-        <div class="form-group">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <label style="margin:0;">Select Nearby Network</label>
-            <button type="button" id="btnRescan" style="flex:none; padding:4px 10px; font-size:0.75rem; border-radius:6px; background:var(--btn-bg); border:1px solid var(--border); color:var(--text); cursor:pointer;">🔄 Rescan</button>
-          </div>
-          <select id="wifiSelect">
-            <option value="" disabled selected>🔍 Scanning for Wi-Fi networks...</option>
-          </select>
-        </div>
-
-        <div class="form-group" id="manualSsidGroup" style="display:none;">
-          <label for="wifiSsid">Wi-Fi Network Name (SSID)</label>
-          <input type="text" id="wifiSsid" placeholder="Enter Wi-Fi SSID" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
-        </div>
-
-        <div class="form-group">
-          <label for="wifiPass">Wi-Fi Password</label>
-          <div style="position:relative; display:flex; align-items:center;">
-            <input type="password" id="wifiPass" placeholder="Enter Wi-Fi Password" autocomplete="new-password" style="padding-right:42px;">
-            <button type="button" id="btnTogglePass" style="position:absolute; right:4px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1.1rem; padding:4px 8px; flex:none;">👁️</button>
-          </div>
-        </div>
-
-        <div class="form-group" style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
-          <label for="apPass">Hotspot Password (Optional)</label>
-          <div style="position:relative; display:flex; align-items:center;">
-            <input type="password" id="apPass" placeholder="Leave blank for open network (min 8 chars)" autocomplete="new-password" style="padding-right:42px;">
-            <button type="button" id="btnToggleApPass" style="position:absolute; right:4px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1.1rem; padding:4px 8px; flex:none;">👁️</button>
-          </div>
-          <div class="helper-text">Security password for <strong>NHL-Goal-Light-Setup</strong> Wi-Fi. Leave blank for open access.</div>
-        </div>
-      </div>
-
       <!-- Firmware & Updates -->
       <div class="card">
         <h2>🔄 Firmware & Updates</h2>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <span style="font-size:0.85rem; color:var(--text-muted)">Current Version: <strong id="curVer" style="color:var(--text)">v1.1.0.0</strong></span>
+          <span style="font-size:0.85rem; color:var(--text-muted)">Current Version: <strong id="curVer" style="color:var(--text)">v1.1.0.1</strong></span>
           <button type="button" id="btnCheckUpdate" style="padding:6px 12px; font-size:0.8rem; background:var(--btn-bg); border:1px solid var(--border); color:var(--text); border-radius:8px; cursor:pointer;">🔍 Check GitHub</button>
         </div>
         <div id="updateInfo" style="display:none; padding:10px; border-radius:8px; background:rgba(46,160,67,0.15); border:1px solid var(--success); margin-bottom:12px; font-size:0.82rem; line-height:1.4;"></div>
@@ -862,17 +866,38 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     const navTabs = document.querySelectorAll('.nav-tab');
     const tabPages = document.querySelectorAll('.tab-page');
 
-    navTabs.forEach(tab => {
-      tab.onclick = () => {
-        const targetTab = tab.getAttribute('data-tab');
-        navTabs.forEach(t => t.classList.remove('active'));
-        tabPages.forEach(p => p.classList.remove('active'));
+    function switchTab(targetTab) {
+      if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
+      }
+      navTabs.forEach(t => {
+        if (t.getAttribute('data-tab') === targetTab) {
+          t.classList.add('active');
+        } else {
+          t.classList.remove('active');
+        }
+      });
+      tabPages.forEach(p => {
+        if (p.id === 'tab-' + targetTab) {
+          p.classList.add('active');
+        } else {
+          p.classList.remove('active');
+        }
+      });
+    }
 
-        tab.classList.add('active');
-        const activePage = document.getElementById('tab-' + targetTab);
-        if (activePage) activePage.classList.add('active');
-      };
+    navTabs.forEach(tab => {
+      tab.addEventListener('click', (e) => {
+        e.preventDefault();
+        const targetTab = tab.getAttribute('data-tab');
+        switchTab(targetTab);
+      });
     });
+
+    // If loaded in AP Setup Mode (192.168.4.1), default immediately to Settings/System tab
+    if (window.location.hostname === '192.168.4.1') {
+      switchTab('system');
+    }
 
     // Dynamic Hardware Enablement Engine
     const chkHwLights = document.getElementById('chkHwLights');
@@ -1037,11 +1062,10 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     };
 
     wifiSelect.onchange = () => {
-      if (wifiSelect.value === '__manual__') {
-        manualSsidGroup.style.display = 'block';
-      } else {
-        manualSsidGroup.style.display = 'none';
+      if (wifiSelect.value && wifiSelect.value !== '__manual__') {
         wifiSsid.value = wifiSelect.value;
+      } else if (wifiSelect.value === '__manual__') {
+        wifiSsid.focus();
       }
     };
 
@@ -1229,21 +1253,50 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             if (s.system.version) document.getElementById('curVer').textContent = 'v' + s.system.version;
             if (s.system.freeHeap) document.getElementById('diagHeap').textContent = `${Math.round(s.system.freeHeap / 1024)} KB`;
             document.getElementById('diagIp').textContent = window.location.hostname;
+            if (s.system.hostname) {
+              const lbl = document.getElementById('lblMdnsUrl');
+              if (lbl) lbl.textContent = 'http://' + s.system.hostname;
+            }
           }
         }).catch(() => {});
     }
     setInterval(refreshStatus, 4000);
     refreshStatus();
 
-    // Test Celebration Buttons
+    // Live update mDNS label as user types device name
+    const devInput = document.getElementById('deviceNameInput');
+    if (devInput) {
+      devInput.oninput = function() {
+        const val = this.value.trim();
+        const slug = val ? val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') : 'goallight';
+        const lbl = document.getElementById('lblMdnsUrl');
+        if (lbl) lbl.textContent = 'http://' + (slug || 'goallight') + '.local';
+      };
+    }
+
+    // Test Celebration Buttons (transmits active effect immediately)
     document.getElementById('btnTestCelebration').onclick = () => {
-      fetch('/api/test', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({horn: true, light: true}) });
+      const effectVal = parseInt(document.getElementById('effectSelect').value) || 0;
+      fetch('/api/test', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({horn: true, light: true, effect: effectVal})
+      });
     };
     document.getElementById('btnTestLightsOnly').onclick = () => {
-      fetch('/api/test', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({horn: false, light: true}) });
+      const effectVal = parseInt(document.getElementById('effectSelect').value) || 0;
+      fetch('/api/test', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({horn: false, light: true, effect: effectVal})
+      });
     };
     document.getElementById('btnTestHornOnly').onclick = () => {
-      fetch('/api/test', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({horn: true, light: false}) });
+      fetch('/api/test', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({horn: true, light: false})
+      });
     };
 
     // Save & Reboot Flow
@@ -1260,9 +1313,18 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         document.activeElement.blur();
       }
 
-      let targetSsid = wifiSelect.value;
-      if (!targetSsid || targetSsid === '__manual__') {
-        targetSsid = wifiSsid.value.trim();
+      let targetSsid = wifiSsid.value.trim();
+      if (!targetSsid && wifiSelect.value && wifiSelect.value !== '__manual__') {
+        targetSsid = wifiSelect.value;
+        wifiSsid.value = targetSsid;
+      }
+
+      const isApModeActive = (window.location.hostname === '192.168.4.1');
+      if (isApModeActive && !targetSsid) {
+        alert('⚠️ Please select or enter your Wi-Fi Network Name (SSID) before saving!');
+        switchTab('system');
+        wifiSsid.focus();
+        return;
       }
 
       const data = {
