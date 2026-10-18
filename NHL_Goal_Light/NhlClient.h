@@ -125,6 +125,7 @@ private:
     WiFiClientSecure client;
     client.setInsecure();
     HTTPClient http;
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS); // Follow 301/302/307 redirects from NHL CDN
     http.begin(client, url);
     http.setUserAgent("NHL-GoalLight/1.0");
     http.setTimeout(10000);
@@ -164,6 +165,7 @@ private:
     WiFiClientSecure client;
     client.setInsecure();
     HTTPClient http;
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS); // Follow 301/302/307 redirects
     http.begin(client, url);
     http.setUserAgent("NHL-GoalLight/1.0");
     http.setTimeout(8000);

@@ -265,13 +265,22 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
           <button type="button" id="btnTogglePass" style="position:absolute; right:4px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1.1rem; padding:4px 8px; flex:none;">👁️</button>
         </div>
       </div>
+
+      <div class="form-group" style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
+        <label for="apPass">Goal Light Hotspot Password (Optional)</label>
+        <div style="position:relative; display:flex; align-items:center;">
+          <input type="password" id="apPass" placeholder="Leave blank for open network (min 8 chars)" autocomplete="new-password" style="padding-right:42px;">
+          <button type="button" id="btnToggleApPass" style="position:absolute; right:4px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1.1rem; padding:4px 8px; flex:none;">👁️</button>
+        </div>
+        <span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-top:4px;">Security password for <strong>NHL-Goal-Light-Setup</strong> Wi-Fi. Leave blank for open access.</span>
+      </div>
     </div>
 
     <!-- Firmware & Updates -->
     <div class="card">
       <h2>🔄 Firmware & Updates</h2>
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <span style="font-size:0.85rem; color:var(--text-muted)">Current Version: <strong id="curVer" style="color:var(--text)">v1.0.0</strong></span>
+        <span style="font-size:0.85rem; color:var(--text-muted)">Current Version: <strong id="curVer" style="color:var(--text)">v1.0.1</strong></span>
         <button id="btnCheckUpdate" style="padding:6px 12px; font-size:0.8rem; background:var(--btn-bg); border:1px solid var(--border); color:var(--text); border-radius:8px; cursor:pointer;">🔍 Check GitHub</button>
       </div>
       <div id="updateInfo" style="display:none; padding:10px; border-radius:8px; background:rgba(46,160,67,0.15); border:1px solid var(--success); margin-bottom:12px; font-size:0.82rem; line-height:1.4;"></div>
@@ -352,6 +361,8 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     const btnRescan = document.getElementById('btnRescan');
     const wifiPass = document.getElementById('wifiPass');
     const btnTogglePass = document.getElementById('btnTogglePass');
+    const apPass = document.getElementById('apPass');
+    const btnToggleApPass = document.getElementById('btnToggleApPass');
 
     let savedSsid = '';
     let scanPollTimer = null;
@@ -363,6 +374,16 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       } else {
         wifiPass.type = 'password';
         btnTogglePass.textContent = '👁️';
+      }
+    };
+
+    btnToggleApPass.onclick = () => {
+      if (apPass.type === 'password') {
+        apPass.type = 'text';
+        btnToggleApPass.textContent = '🔒';
+      } else {
+        apPass.type = 'password';
+        btnToggleApPass.textContent = '👁️';
       }
     };
 
@@ -490,6 +511,9 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
           savedSsid = cfg.ssid;
           wifiSsid.value = cfg.ssid;
         }
+        if (cfg.apPass) {
+          apPass.value = cfg.apPass;
+        }
         fetchScan();
       }).catch(console.error);
 
@@ -510,7 +534,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             badge.textContent = 'AP Setup Mode';
           }
           if (s.system && s.system.version) {
-            document.getElementById('curVer').textContent = s.system.version;
+            document.getElementById('curVer').textContent = 'v' + s.system.version;
           }
         }).catch(() => {});
     }
@@ -557,7 +581,8 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         alertBuzzer: document.getElementById('chkBuzzer').checked,
         alertWin: document.getElementById('chkWin').checked,
         ssid: targetSsid,
-        pass: wifiPass.value
+        pass: wifiPass.value,
+        apPass: apPass.value
       };
 
       // Show save modal overlay immediately
@@ -635,9 +660,13 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
           if (latestTag !== currentTag && latestTag) {
             updateInfo.style.borderColor = '#e63946';
             updateInfo.style.background = 'rgba(230,57,70,0.15)';
+            let binAsset = rel.assets && rel.assets.find(a => a.name.endsWith('.bin'));
+            let assetUrl = binAsset ? binAsset.browser_download_url : rel.html_url;
             updateInfo.innerHTML = `<strong>✨ Update Available: ${latestTag}</strong><br>` +
-              `Release notes: ${rel.body ? rel.body.substring(0, 100) : 'New improvements'}<br>` +
-              `<a href="${rel.html_url}" target="_blank" style="color:#58a6ff; text-decoration:underline; display:inline-block; margin-top:6px;">View on GitHub / Download .bin</a>`;
+              `Release notes: ${rel.body ? rel.body.substring(0, 150) : 'Performance improvements and fixes'}<br><br>` +
+              `<a href="${assetUrl}" target="_blank" style="display:inline-block; padding:6px 12px; background:var(--accent); color:#fff; border-radius:6px; text-decoration:none; font-weight:600; font-size:0.8rem; margin-right:8px;">📥 Download ${binAsset ? binAsset.name : 'firmware.bin'}</a>` +
+              `<a href="${rel.html_url}" target="_blank" style="color:#58a6ff; text-decoration:underline; font-size:0.8rem;">View on GitHub</a><br>` +
+              `<span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-top:6px;">After downloading, select it below under "Manual OTA Firmware Upload" to flash wirelessly!</span>`;
           } else {
             updateInfo.style.borderColor = 'var(--success)';
             updateInfo.style.background = 'rgba(46,160,67,0.15)';

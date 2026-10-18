@@ -1,7 +1,7 @@
 #pragma once
 #include <Arduino.h>
 
-#define FIRMWARE_VERSION     "1.0.0"
+#define FIRMWARE_VERSION     "1.0.1"
 #define GITHUB_REPO          "RevelRob/NHLGoalLight"
 
 // =====================================================
@@ -60,6 +60,7 @@
 struct SystemConfig {
   char wifi_ssid[33];
   char wifi_pass[65];
+  char ap_password[33];      // SoftAP password (empty = open, min 8 chars = WPA2)
   char primary_team[4];      // e.g. "NYR"
   uint8_t brightness;        // 0-255
   uint8_t volume_index;      // 0-5
@@ -75,6 +76,7 @@ inline void initDefaultConfig(SystemConfig &cfg) {
   memset(&cfg, 0, sizeof(SystemConfig));
   strncpy(cfg.wifi_ssid, "", sizeof(cfg.wifi_ssid));
   strncpy(cfg.wifi_pass, "", sizeof(cfg.wifi_pass));
+  strncpy(cfg.ap_password, "", sizeof(cfg.ap_password));
   strncpy(cfg.primary_team, "NYR", sizeof(cfg.primary_team));
   cfg.brightness = DEFAULT_BRIGHTNESS;
   cfg.volume_index = DEFAULT_VOLUME_IDX;

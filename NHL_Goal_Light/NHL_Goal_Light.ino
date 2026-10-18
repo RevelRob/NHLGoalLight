@@ -145,9 +145,24 @@ void loop() {
     return;
   }
 
-  // 6. Check Wi-Fi reconnection if lost
-  if (WiFi.status() != WL_CONNECTED && !isApMode) {
-    return;
+  // 6. Check Wi-Fi reconnection if lost; if lost for > 45s, activate Captive Portal AP
+  static unsigned long disconnectStartTime = 0;
+  if (!isApMode) {
+    if (WiFi.status() != WL_CONNECTED) {
+      if (disconnectStartTime == 0) {
+        disconnectStartTime = now;
+        Serial.println("[Network] Wi-Fi lost! Attempting auto-reconnect...");
+      }
+      if (now - disconnectStartTime > 45000) {
+        Serial.println("[Network] Reconnection timed out (45s). Activating Captive Portal Access Point...");
+        disconnectStartTime = 0;
+        isApMode = true;
+        setupNetwork();
+      }
+      return;
+    } else {
+      disconnectStartTime = 0;
+    }
   }
 
   // 7. Poll NHL Web API
@@ -263,11 +278,17 @@ void setupNetwork() {
     WiFi.mode(WIFI_AP_STA); // AP_STA allows background scanning while AP is active
     delay(50);
     WiFi.softAPConfig(apIP, apIP, netMsk);
-    bool apSuccess = WiFi.softAP(AP_SSID);
+    bool apSuccess = false;
+    if (strlen(config.ap_password) >= 8) {
+      apSuccess = WiFi.softAP(AP_SSID, config.ap_password);
+      Serial.printf("[Network] AP '%s' (WPA2 secured) status: %s (IP: 192.168.4.1)\n", AP_SSID, apSuccess ? "ACTIVE" : "FAILED");
+    } else {
+      apSuccess = WiFi.softAP(AP_SSID);
+      Serial.printf("[Network] AP '%s' (Open network) status: %s (IP: 192.168.4.1)\n", AP_SSID, apSuccess ? "ACTIVE" : "FAILED");
+    }
     delay(100);
 
     dnsServer.start(DNS_PORT, "*", apIP);
-    Serial.printf("[Network] AP '%s' status: %s (IP: 192.168.4.1)\n", AP_SSID, apSuccess ? "ACTIVE" : "FAILED");
 
     // Pre-cache nearby Wi-Fi networks immediately
     WiFi.scanNetworks(true);
@@ -282,14 +303,18 @@ void setupNetwork() {
     WiFi.mode(WIFI_AP_STA);
     delay(50);
     WiFi.softAPConfig(apIP, apIP, netMsk);
-    WiFi.softAP(AP_SSID);
+    if (strlen(config.ap_password) >= 8) {
+      WiFi.softAP(AP_SSID, config.ap_password);
+    } else {
+      WiFi.softAP(AP_SSID);
+    }
     dnsServer.start(DNS_PORT, "*", apIP);
 
     WiFi.setHostname(MDNS_HOSTNAME);
     WiFi.begin(config.wifi_ssid, config.wifi_pass);
 
     unsigned long startAttempt = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 8000) {
+    while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 12000) {
       delay(200);
       Serial.print(".");
 #ifdef PIN_STATUS_LED
@@ -315,8 +340,17 @@ void setupNetwork() {
       digitalWrite(PIN_STATUS_LED, HIGH); // Blue LED OFF when connected online
 #endif
     } else {
-      Serial.println("\n[Network] Wi-Fi Connection failed. AP remains broadcast on 192.168.4.1.");
+      Serial.println("\n[Network] Wi-Fi Connection failed. Fallback to Captive Portal (192.168.4.1)...");
       isApMode = true;
+      WiFi.mode(WIFI_AP_STA);
+      delay(50);
+      WiFi.softAPConfig(apIP, apIP, netMsk);
+      if (strlen(config.ap_password) >= 8) {
+        WiFi.softAP(AP_SSID, config.ap_password);
+      } else {
+        WiFi.softAP(AP_SSID);
+      }
+      dnsServer.start(DNS_PORT, "*", apIP);
       WiFi.scanNetworks(true);
       leds.setMode(LED_AP_CONFIG);
 #ifdef PIN_STATUS_LED
@@ -384,7 +418,8 @@ void setupWebServer() {
     json += "\"alertPowerPlay\":" + String(config.alert_power_play ? "true" : "false") + ",";
     json += "\"alertBuzzer\":" + String(config.alert_period_buzzer ? "true" : "false") + ",";
     json += "\"alertWin\":" + String(config.alert_game_win ? "true" : "false") + ",";
-    json += "\"ssid\":\"" + String(config.wifi_ssid) + "\"";
+    json += "\"ssid\":\"" + String(config.wifi_ssid) + "\",";
+    json += "\"apPass\":\"" + String(config.ap_password) + "\"";
     json += "}";
     server.send(200, "application/json", json);
   });
@@ -455,6 +490,13 @@ void setupWebServer() {
           }
           strncpy(config.wifi_pass, p.c_str(), sizeof(config.wifi_pass));
         }
+      }
+
+      int apPos = body.indexOf("\"apPass\":\"");
+      if (apPos >= 0) {
+        String ap = body.substring(apPos + 10, body.indexOf("\"", apPos + 10));
+        ap.trim();
+        strncpy(config.ap_password, ap.c_str(), sizeof(config.ap_password));
       }
 
       saveConfiguration();
@@ -543,10 +585,12 @@ void loadConfiguration() {
 
   String ssid = prefs.getString("ssid", "");
   String pass = prefs.getString("pass", "");
+  String apPass = prefs.getString("ap_pass", "");
   String team = prefs.getString("team", "NYR");
 
   if (ssid.length() > 0) strncpy(config.wifi_ssid, ssid.c_str(), sizeof(config.wifi_ssid));
   if (pass.length() > 0) strncpy(config.wifi_pass, pass.c_str(), sizeof(config.wifi_pass));
+  if (apPass.length() > 0) strncpy(config.ap_password, apPass.c_str(), sizeof(config.ap_password));
   if (team.length() > 0) strncpy(config.primary_team, team.c_str(), sizeof(config.primary_team));
 
   config.brightness = prefs.getUChar("bright", DEFAULT_BRIGHTNESS);
@@ -566,6 +610,7 @@ void saveConfiguration() {
   prefs.begin("goallight", false);
   prefs.putString("ssid", config.wifi_ssid);
   prefs.putString("pass", config.wifi_pass);
+  prefs.putString("ap_pass", config.ap_password);
   prefs.putString("team", config.primary_team);
   prefs.putUChar("bright", config.brightness);
   prefs.putUChar("vol", config.volume_index);

@@ -7,6 +7,10 @@
 *.hex
 *.bin
 *.elf
+*.map
+!docs/builds/*.bin
+
+
 
 # IDE / Editor configuration
 .vscode/
@@ -17,3 +21,9 @@
 # OS files
 .DS_Store
 Thumbs.db
+
+# Local flashing scripts and scratch tests
+flash_*.sh
+wait_and_flash.sh
+Simple_Test/
+
