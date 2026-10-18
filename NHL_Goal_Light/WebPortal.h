@@ -378,9 +378,133 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       border: 1px solid var(--border);
       margin-top: 10px;
     }
-    #ringCanvas {
+    #ringCanvas, .event-canvas {
       width: 220px;
-      height: 160px;
+      height: 140px;
+    }
+
+    /* Live Last Play Box */
+    .last-play-box {
+      background: #11141a;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 12px;
+    }
+    .last-play-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .last-play-text {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.35;
+    }
+
+    /* Synchronised Clock Grid */
+    .sync-clock-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .sync-clock-card {
+      background: #11141a;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 10px;
+      text-align: center;
+    }
+    .sync-clock-label {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 700;
+    }
+    .sync-clock-time {
+      font-size: 1.45rem;
+      font-weight: 800;
+      color: var(--text);
+      margin: 4px 0 2px 0;
+    }
+    .sync-clock-sub {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    /* Collapsible Visualiser Drawers */
+    .btn-toggle-drawer {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      margin-top: 8px;
+      transition: all 0.2s;
+    }
+    .btn-toggle-drawer:hover {
+      background: var(--btn-bg);
+      color: var(--text);
+      border-color: rgba(255,255,255,0.15);
+    }
+    .btn-toggle-drawer.active {
+      background: rgba(230,57,70,0.12);
+      border-color: rgba(230,57,70,0.3);
+      color: var(--text);
+    }
+    .event-drawer {
+      margin-top: 8px;
+      animation: fadeInDrawer 0.25s ease-out;
+    }
+    @keyframes fadeInDrawer {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .drawer-caption {
+      font-size: 0.74rem;
+      color: var(--text-muted);
+      margin-top: 6px;
+      text-align: center;
+    }
+
+    /* Hardware Pinout Table */
+    .pinout-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.76rem;
+      margin-top: 8px;
+    }
+    .pinout-table th, .pinout-table td {
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      text-align: left;
+    }
+    .pinout-table th {
+      background: #11141a;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 700;
+      font-size: 0.68rem;
+    }
+    .pinout-table td code {
+      color: var(--accent);
+      font-weight: 700;
     }
 
     /* Fixed Bottom Save Bar */
@@ -495,6 +619,59 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         <div class="helper-text" id="liveStatusSubtext" style="text-align:center;">Synchronised with NHL live scores.</div>
       </div>
 
+      <!-- Live Broadcast Synchronisation & Last Play Reference Card -->
+      <div class="card" id="cardLiveSync">
+        <h2>⏱️ Broadcast Synchronisation</h2>
+        
+        <!-- Last Official Play (Reference Anchor for Live Sync) -->
+        <div class="last-play-box">
+          <div class="last-play-title">
+            <span>🏒 Last Official NHL Play</span>
+            <span style="font-size:0.68rem; color:#58a6ff; font-weight:600;">Broadcast Sync Reference</span>
+          </div>
+          <div class="last-play-text" id="liveLastPlay">⏳ Waiting for game action / puck drop...</div>
+          <div class="helper-text" style="margin-top:6px;">Compare this exact play description and period time against your television broadcast.</div>
+        </div>
+
+        <!-- Synchronised Game Clocks -->
+        <div class="sync-clock-grid">
+          <div class="sync-clock-card">
+            <div class="sync-clock-label">Official NHL Clock</div>
+            <div class="sync-clock-time" id="liveOfficialClock">--:--</div>
+            <div class="sync-clock-sub" id="liveOfficialPeriod">Period --</div>
+          </div>
+          <div class="sync-clock-card" style="border-color:rgba(230,57,70,0.3); background:rgba(230,57,70,0.06);">
+            <div class="sync-clock-label" style="color:var(--accent);">Target TV Clock</div>
+            <div class="sync-clock-time" id="liveTargetTvClock" style="color:var(--accent);">--:--</div>
+            <div class="sync-clock-sub" id="liveDelayBadge">Delay: 0s Buffer</div>
+          </div>
+        </div>
+
+        <!-- Live Delay Buffer Slider & Nudge Buttons -->
+        <div class="form-group">
+          <label>Broadcast Delay Buffer: <strong id="liveDelayVal" style="color:var(--accent);">0s (Instantaneous)</strong></label>
+          <div class="slider-container">
+            <input type="range" id="liveDelaySlider" min="0" max="120" value="0" step="1">
+          </div>
+        </div>
+
+        <div class="btn-row" style="margin-top:8px; margin-bottom:8px;">
+          <button type="button" onclick="quickNudgeDelay(-5)">⏪ -5s</button>
+          <button type="button" onclick="quickNudgeDelay(-1)">◀️ -1s</button>
+          <button type="button" onclick="quickNudgeDelay(1)">▶️ +1s</button>
+          <button type="button" onclick="quickNudgeDelay(5)">⏩ +5s</button>
+        </div>
+
+        <label style="margin-top:8px;">Quick Broadcaster Presets:</label>
+        <div class="preset-row">
+          <button type="button" class="preset-btn" onclick="quickSetPreset(0)">⚡ Cable / OTA (0s)</button>
+          <button type="button" class="preset-btn" onclick="quickSetPreset(22)">🍁 Sportsnet+ (22s)</button>
+          <button type="button" class="preset-btn" onclick="quickSetPreset(28)">🏒 NHL.tv / ESPN+ (28s)</button>
+          <button type="button" class="preset-btn" onclick="quickSetPreset(45)">📺 YouTube TV (45s)</button>
+        </div>
+        <div class="helper-text" style="margin-top:8px;">⚡ Adjusting delay updates your goal light buffer immediately without saving or rebooting.</div>
+      </div>
+
       <!-- Upcoming Game Card (Simple & Detailed Views) -->
       <div class="card" id="cardUpcomingGame">
         <h2>
@@ -599,7 +776,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     </div>
 
     <!-- ===================================================== -->
-    <!-- TAB 2: LIGHTS (LED GEOMETRY & CELEBRATION FX)         -->
+    <!-- TAB 2: LIGHTS (HARDWARE & GEOMETRY)                   -->
     <!-- ===================================================== -->
     <div id="tab-lights" class="tab-page">
       
@@ -619,6 +796,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             <option value="2">⏸️ Parallel Columns</option>
             <option value="3">📏 Linear Strip / Bar</option>
           </select>
+          <div class="helper-text">Physical orientation and structure of your addressable LEDs.</div>
         </div>
         <div class="form-group">
           <label class="checkbox-row" style="margin:0;">
@@ -628,44 +806,6 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
               <span class="chk-desc">Reverses clockwise vs counter-clockwise beacon sweep.</span>
             </div>
           </label>
-        </div>
-      </div>
-
-      <!-- Celebration Lighting Effects -->
-      <div class="card">
-        <h2>✨ Goal Celebration Effects</h2>
-        <div class="form-group">
-          <label for="effectSelect">Celebration Light Pattern</label>
-          <select id="effectSelect">
-            <option value="0">🚨 Rotating Halogen Beacon (Classic Revolving Reflector)</option>
-            <option value="1">⚡ High-Speed Arena Strobe (Stadium Flash)</option>
-            <option value="2">🌊 Team Colour Breathe (Pulsing Unison Glow)</option>
-            <option value="3">🚔 Dual Siren Flasher (Emergency Wig-Wag)</option>
-            <option value="4">❤️ Heartbeat Pulse (Urgent Goal Surge)</option>
-          </select>
-          <div class="helper-text">Each effect generates distinct, high-impact stadium celebrations tailored to your ring.</div>
-        </div>
-        <div class="form-group">
-          <label>Celebration Duration: <span id="hornVal">12s</span></label>
-          <div class="slider-container">
-            <input type="range" id="hornSlider" min="5" max="30" value="12">
-          </div>
-          <div class="helper-text">Length of light celebration and goal horn playback per goal.</div>
-        </div>
-
-        <!-- Virtual LED Ring Live Preview -->
-        <div class="form-group">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <label style="margin:0;">Live LED Visualiser Preview</label>
-            <div class="view-toggle">
-              <button type="button" class="view-toggle-btn active" id="btnPrevCeleb" onclick="setVisualiserMode('celebration')">🚨 Celebration</button>
-              <button type="button" class="view-toggle-btn" id="btnPrevIdle" onclick="setVisualiserMode('idle')">🌙 Idle Mode</button>
-            </div>
-          </div>
-          <div class="ring-preview-container">
-            <canvas id="ringCanvas" width="220" height="160"></canvas>
-            <div id="previewCaption" style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;">Live animation in team colour</div>
-          </div>
         </div>
       </div>
 
@@ -681,20 +821,228 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             <option value="3">🔥 Candle / Ember Flicker</option>
             <option value="4">💫 Orbit Sweep (Gentle Comet)</option>
           </select>
-          <div class="helper-text">Lighting style when no game event is actively firing.</div>
+          <div class="helper-text">Lighting style when no game event is actively firing. Selecting <strong>Dark / Off</strong> keeps all LEDs turned completely off during idle.</div>
         </div>
+      </div>
+
+      <!-- Geometry & Idle Preview -->
+      <div class="card">
+        <h2>📐 Hardware Geometry & Idle Preview</h2>
+        <div class="ring-preview-container">
+          <canvas id="ringCanvas" width="220" height="140"></canvas>
+          <div id="previewCaption" style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;">Hardware Geometry Preview</div>
+        </div>
+        <div class="helper-text" style="text-align:center; margin-top:8px;">Shows the active physical layout mapping and ambient idle behaviour.</div>
       </div>
     </div>
 
     <!-- ===================================================== -->
-    <!-- TAB 3: EVENTS (GAME EVENT ACTION MATRIX & SIMULATOR)  -->
+    <!-- TAB 3: EVENTS (GAME EVENT CHOICES & VISUALISERS)      -->
     <!-- ===================================================== -->
     <div id="tab-events" class="tab-page">
-      
-      <!-- Event Simulator Studio -->
+
+      <div class="helper-text" style="margin-bottom:4px;">Configure actions and visual effects for every game event. Tap any visualiser drawer to preview its celebration effect.</div>
+
+      <!-- 1. Favourite Team Goal -->
+      <div class="card">
+        <h2>
+          <span>🚨 Favourite Team Goal</span>
+          <span style="font-size:0.72rem; color:var(--success); font-weight:700;">Always Active</span>
+        </h2>
+        
+        <div class="form-group">
+          <label for="effectSelect">Celebration Light Pattern</label>
+          <select id="effectSelect">
+            <option value="0">🚨 Rotating Halogen Beacon (Classic Revolving Reflector)</option>
+            <option value="1">⚡ High-Speed Arena Strobe (Stadium Flash)</option>
+            <option value="2">🌊 Team Colour Breathe (Pulsing Unison Glow)</option>
+            <option value="3">🚔 Dual Siren Flasher (Emergency Wig-Wag)</option>
+            <option value="4">❤️ Heartbeat Pulse (Urgent Goal Surge)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-row" style="margin:0;">
+            <input type="checkbox" id="chkGoalClassicRed">
+            <div class="chk-text">
+              <span class="chk-title">🔴 Use Classic Stadium Red</span>
+              <span class="chk-desc">Illuminates in traditional red (typical stadium goal light colour) instead of primary franchise team colours.</span>
+            </div>
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label>Celebration Duration: <span id="hornVal">12s</span></label>
+          <div class="slider-container">
+            <input type="range" id="hornSlider" min="5" max="30" value="12">
+          </div>
+          <div class="helper-text">Duration of light celebration and goal horn audio per goal.</div>
+        </div>
+
+        <button type="button" class="btn-toggle-drawer" onclick="toggleEventDrawer('goal')">
+          <span>👁️ Visualiser Preview</span>
+          <span id="arrow-goal">▾</span>
+        </button>
+        <div class="event-drawer" id="drawer-goal" style="display:none;">
+          <div class="ring-preview-container">
+            <canvas class="event-canvas" id="canvas-goal" width="220" height="140"></canvas>
+            <div class="drawer-caption" id="cap-goal">Live Goal Celebration</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Opponent Goal Alert -->
+      <div class="card">
+        <h2>
+          <span>🥅 Opponent Goal Alert</span>
+        </h2>
+        <label class="checkbox-row">
+          <input type="checkbox" id="chkOpponent">
+          <div class="chk-text">
+            <span class="chk-title">Enable Opponent Goal Alert</span>
+            <span class="chk-desc">Triggers alert when the opposing team scores.</span>
+          </div>
+        </label>
+        <label class="checkbox-row" data-hw="speaker">
+          <input type="checkbox" id="chkOpponentSound" checked>
+          <div class="chk-text">
+            <span class="chk-title">🔊 Warning Audio Tone</span>
+            <span class="chk-desc">Play acoustic warning buzzer when opponent scores.</span>
+          </div>
+        </label>
+        <button type="button" class="btn-toggle-drawer" onclick="toggleEventDrawer('opponent')">
+          <span>👁️ Visualiser Preview</span>
+          <span id="arrow-opponent">▾</span>
+        </button>
+        <div class="event-drawer" id="drawer-opponent" style="display:none;">
+          <div class="ring-preview-container">
+            <canvas class="event-canvas" id="canvas-opponent" width="220" height="140"></canvas>
+            <div class="drawer-caption">Opponent Goal • Amber Warning Strobe</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Power Play Awarded -->
+      <div class="card">
+        <h2>
+          <span>⚡ Power Play Awarded</span>
+        </h2>
+        <label class="checkbox-row">
+          <input type="checkbox" id="chkPowerPlay" checked>
+          <div class="chk-text">
+            <span class="chk-title">Enable Power Play Alert</span>
+            <span class="chk-desc">Vibrant gold chase animation when your team gets the man advantage.</span>
+          </div>
+        </label>
+        <label class="checkbox-row" data-hw="speaker">
+          <input type="checkbox" id="chkPowerPlaySound" checked>
+          <div class="chk-text">
+            <span class="chk-title">🔊 Arena Charge Chime</span>
+            <span class="chk-desc">Play uplifting stadium charge chime for power play.</span>
+          </div>
+        </label>
+        <button type="button" class="btn-toggle-drawer" onclick="toggleEventDrawer('powerplay')">
+          <span>👁️ Visualiser Preview</span>
+          <span id="arrow-powerplay">▾</span>
+        </button>
+        <div class="event-drawer" id="drawer-powerplay" style="display:none;">
+          <div class="ring-preview-container">
+            <canvas class="event-canvas" id="canvas-powerplay" width="220" height="140"></canvas>
+            <div class="drawer-caption">Power Play • Golden Man-Advantage Chase</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Period End & Start Buzzer -->
+      <div class="card">
+        <h2>
+          <span>🚨 Period End & Start Buzzer</span>
+        </h2>
+        <label class="checkbox-row">
+          <input type="checkbox" id="chkBuzzer" checked>
+          <div class="chk-text">
+            <span class="chk-title">Enable Period Buzzer Alert</span>
+            <span class="chk-desc">Flashes arena lighting at the conclusion of each period.</span>
+          </div>
+        </label>
+        <label class="checkbox-row" data-hw="speaker">
+          <input type="checkbox" id="chkBuzzerSound" checked>
+          <div class="chk-text">
+            <span class="chk-title">🔊 Authentic Arena Buzzer (120Hz/360Hz)</span>
+            <span class="chk-desc">Sounds authentic harsh arena horn at period end.</span>
+          </div>
+        </label>
+        <button type="button" class="btn-toggle-drawer" onclick="toggleEventDrawer('buzzer')">
+          <span>👁️ Visualiser Preview</span>
+          <span id="arrow-buzzer">▾</span>
+        </button>
+        <div class="event-drawer" id="drawer-buzzer" style="display:none;">
+          <div class="ring-preview-container">
+            <canvas class="event-canvas" id="canvas-buzzer" width="220" height="140"></canvas>
+            <div class="drawer-caption">Period Buzzer • Arena Strobe</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. Relaxed Intermission Glow -->
+      <div class="card" data-hw="lights">
+        <h2>
+          <span>☕ Relaxed Intermission Glow</span>
+        </h2>
+        <label class="checkbox-row">
+          <input type="checkbox" id="chkIntermission" checked>
+          <div class="chk-text">
+            <span class="chk-title">Enable Intermission Glow</span>
+            <span class="chk-desc">Transitions to calm ambient team colour lighting during the 18-minute break.</span>
+          </div>
+        </label>
+        <button type="button" class="btn-toggle-drawer" onclick="toggleEventDrawer('intermission')">
+          <span>👁️ Visualiser Preview</span>
+          <span id="arrow-intermission">▾</span>
+        </button>
+        <div class="event-drawer" id="drawer-intermission" style="display:none;">
+          <div class="ring-preview-container">
+            <canvas class="event-canvas" id="canvas-intermission" width="220" height="140"></canvas>
+            <div class="drawer-caption">Intermission • Calm Ambient Team Glow</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. Game Victory Fanfare -->
+      <div class="card">
+        <h2>
+          <span>🏆 Game Victory Fanfare</span>
+        </h2>
+        <label class="checkbox-row">
+          <input type="checkbox" id="chkWin" checked>
+          <div class="chk-text">
+            <span class="chk-title">Enable Victory Fanfare</span>
+            <span class="chk-desc">Rainbow light celebration when your favourite team wins!</span>
+          </div>
+        </label>
+        <label class="checkbox-row" data-hw="speaker">
+          <input type="checkbox" id="chkWinSound" checked>
+          <div class="chk-text">
+            <span class="chk-title">🔊 Victory Horn & Fanfare</span>
+            <span class="chk-desc">Play celebratory championship fanfare audio.</span>
+          </div>
+        </label>
+        <button type="button" class="btn-toggle-drawer" onclick="toggleEventDrawer('win')">
+          <span>👁️ Visualiser Preview</span>
+          <span id="arrow-win">▾</span>
+        </button>
+        <div class="event-drawer" id="drawer-win" style="display:none;">
+          <div class="ring-preview-container">
+            <canvas class="event-canvas" id="canvas-win" width="220" height="140"></canvas>
+            <div class="drawer-caption">Game Victory • Championship Rainbow Fanfare</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 7. Event Simulator Studio -->
       <div class="card">
         <h2>🧪 Event Simulator Studio</h2>
-        <div class="helper-text" style="margin-bottom:14px;">Test any game event or goal celebration in real time with custom output selection.</div>
+        <div class="helper-text" style="margin-bottom:14px;">Test any game event or celebration on your physical goal light in real time.</div>
 
         <div class="form-group">
           <label for="simEventSelect">Simulated Game Event</label>
@@ -741,60 +1089,6 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
           <button type="button" id="btnRunSimTest" class="primary">▶️ Trigger Event Test</button>
           <button type="button" id="btnStopSimTest" style="background:rgba(230,57,70,0.15); border-color:var(--accent); color:#fff; flex:0.7;">⏹️ Stop / Idle</button>
         </div>
-      </div>
-
-      <!-- Event Trigger Matrix -->
-      <div class="card">
-        <h2>⚡ Event Trigger Matrix</h2>
-        <div class="helper-text" style="margin-bottom:14px;">Select which game milestones trigger goal light alerts, sounds, and lighting effects during live games.</div>
-
-        <label class="checkbox-row">
-          <input type="checkbox" id="chkEventGoal" checked disabled>
-          <div class="chk-text">
-            <span class="chk-title">🚨 Favourite Team Goal</span>
-            <span class="chk-desc">Full celebration fanfare, goal horn sound, and primary lighting effect.</span>
-          </div>
-        </label>
-
-        <label class="checkbox-row">
-          <input type="checkbox" id="chkOpponent">
-          <div class="chk-text">
-            <span class="chk-title">🥅 Opponent Goal Alert</span>
-            <span class="chk-desc">Subtle amber warning pulse when the opposing team scores.</span>
-          </div>
-        </label>
-
-        <label class="checkbox-row">
-          <input type="checkbox" id="chkPowerPlay" checked>
-          <div class="chk-text">
-            <span class="chk-title">⚡ Power Play Awarded</span>
-            <span class="chk-desc">Vibrant gold chase animation when your team gets the man advantage.</span>
-          </div>
-        </label>
-
-        <label class="checkbox-row">
-          <input type="checkbox" id="chkBuzzer" checked>
-          <div class="chk-text">
-            <span class="chk-title">🚨 Period End & Start Buzzer</span>
-            <span class="chk-desc">Sounds the arena horn at the conclusion of each period.</span>
-          </div>
-        </label>
-
-        <label class="checkbox-row" data-hw="lights">
-          <input type="checkbox" id="chkIntermission" checked>
-          <div class="chk-text">
-            <span class="chk-title">☕ Relaxed Intermission Glow</span>
-            <span class="chk-desc">Transitions to calm ambient team colour lighting during the 18-minute break.</span>
-          </div>
-        </label>
-
-        <label class="checkbox-row">
-          <input type="checkbox" id="chkWin" checked>
-          <div class="chk-text">
-            <span class="chk-title">🏆 Game Victory Fanfare</span>
-            <span class="chk-desc">Extended victory horn and rainbow light celebration when your team wins!</span>
-          </div>
-        </label>
       </div>
     </div>
 
@@ -916,8 +1210,8 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         <label class="checkbox-row">
           <input type="checkbox" id="chkHwSpeaker" checked>
           <div class="chk-text">
-            <span class="chk-title">🔊 DFPlayer Mini Audio (Speaker)</span>
-            <span class="chk-desc">Authentic goal horns, period end sirens, and championship fanfares.</span>
+            <span class="chk-title">🔊 MAX98357A I2S Audio (Speaker)</span>
+            <span class="chk-desc">High-fidelity I2S DAC: synthesizes authentic horns, buzzers & fanfares (with or without MicroSD module).</span>
           </div>
         </label>
 
@@ -930,11 +1224,33 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         </label>
       </div>
 
+      <!-- Attached Hardware Pinout Reference (Card 4) -->
+      <div class="card">
+        <h2>📌 ESP32-S3 Super Mini Pinout Reference</h2>
+        <div class="helper-text" style="margin-bottom:10px;">Recommended wiring connections for your goal light components:</div>
+        <table class="pinout-table">
+          <thead>
+            <tr><th>Pin</th><th>Module / Function</th><th>Connection</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>GPIO 1</code></td><td>MAX98357A I2S BCLK</td><td>Bit Clock</td></tr>
+            <tr><td><code>GPIO 2</code></td><td>MAX98357A I2S LRC</td><td>Word Select (LRC)</td></tr>
+            <tr><td><code>GPIO 3</code></td><td>MAX98357A I2S DIN</td><td>Audio Data In</td></tr>
+            <tr><td><code>GPIO 4</code></td><td>WS2812B NeoPixel DIN</td><td>LED Ring Signal</td></tr>
+            <tr><td><code>GPIO 8</code></td><td>Onboard Status LED</td><td>Wi-Fi / Activity</td></tr>
+            <tr><td><code>GPIO 9</code></td><td>Tactile Pushbutton</td><td>Manual Goal Trigger</td></tr>
+            <tr><td><code>GPIO 10-13</code></td><td>MicroSD SPI (Optional)</td><td>CS (10), MOSI (11), SCK (12), MISO (13)</td></tr>
+            <tr><td><code>5V / GND</code></td><td>Power Rail</td><td>MAX98357A Vin & LED Ring VDD</td></tr>
+          </tbody>
+        </table>
+        <div class="helper-text" style="margin-top:8px;">💡 <strong>Note:</strong> Real-time audio synthesis runs natively via I2S without needing a MicroSD card. Connecting an optional MicroSD module allows custom team WAV horn clips.</div>
+      </div>
+
       <!-- Firmware & Updates -->
       <div class="card">
         <h2>🔄 Firmware & Updates</h2>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <span style="font-size:0.85rem; color:var(--text-muted)">Current Version: <strong id="curVer" style="color:var(--text)">v1.1.0.2</strong></span>
+          <span style="font-size:0.85rem; color:var(--text-muted)">Current Version: <strong id="curVer" style="color:var(--text)">v1.1.0.3</strong></span>
           <button type="button" id="btnCheckUpdate" style="padding:6px 12px; font-size:0.8rem; background:var(--btn-bg); border:1px solid var(--border); color:var(--text); border-radius:8px; cursor:pointer;">🔍 Check GitHub</button>
         </div>
         <label class="checkbox-row" style="margin-bottom:12px;">
@@ -1177,38 +1493,97 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     const hornVal = document.getElementById('hornVal');
     hornSlider.oninput = () => hornVal.textContent = hornSlider.value + 's';
 
+    // Live Delay Controls (Live Tab & Sync Tab Synchronised)
+    const liveDelaySlider = document.getElementById('liveDelaySlider');
+    const liveDelayVal = document.getElementById('liveDelayVal');
     const delaySlider = document.getElementById('delaySlider');
     const delayVal = document.getElementById('delayVal');
-    delaySlider.oninput = () => {
-      const v = parseInt(delaySlider.value);
-      delayVal.textContent = v === 0 ? '0s (Instantaneous)' : v + 's delay';
+
+    function updateDelayDisplays(v) {
+      const txt = (v === 0) ? '0s (Instantaneous)' : v + 's delay';
+      if (liveDelayVal) liveDelayVal.textContent = txt;
+      if (delayVal) delayVal.textContent = txt;
+      if (liveDelaySlider) liveDelaySlider.value = v;
+      if (delaySlider) delaySlider.value = v;
+      const badge = document.getElementById('liveDelayBadge');
+      if (badge) badge.textContent = `Delay: ${v}s Buffer`;
+    }
+
+    function sendQuickDelay(v) {
+      updateDelayDisplays(v);
+      fetch('/api/quick-set', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ broadcastDelay: v })
+      }).catch(console.error);
+    }
+
+    if (liveDelaySlider) {
+      liveDelaySlider.oninput = () => updateDelayDisplays(parseInt(liveDelaySlider.value) || 0);
+      liveDelaySlider.onchange = () => sendQuickDelay(parseInt(liveDelaySlider.value) || 0);
+    }
+    if (delaySlider) {
+      delaySlider.oninput = () => updateDelayDisplays(parseInt(delaySlider.value) || 0);
+      delaySlider.onchange = () => sendQuickDelay(parseInt(delaySlider.value) || 0);
+    }
+
+    window.quickSetPreset = (sec) => {
+      sendQuickDelay(sec);
     };
 
     window.setBroadcastPreset = (sec) => {
-      delaySlider.value = sec;
-      delaySlider.oninput();
+      sendQuickDelay(sec);
+    };
+
+    window.quickNudgeDelay = (delta) => {
+      let v = (parseInt(liveDelaySlider ? liveDelaySlider.value : delaySlider.value) || 0) + delta;
+      if (v < 0) v = 0;
+      if (v > 120) v = 120;
+      sendQuickDelay(v);
     };
 
     window.nudgeDelay = (delta) => {
-      let v = parseInt(delaySlider.value) + delta;
-      if (v < 0) v = 0;
-      if (v > 120) v = 120;
-      delaySlider.value = v;
-      delaySlider.oninput();
+      window.quickNudgeDelay(delta);
     };
 
-    // Virtual LED Preview Renderer (Responsive to Geometry & Celebration/Idle Modes)
-    const ringCanvas = document.getElementById('ringCanvas');
-    const ringCtx = ringCanvas.getContext('2d');
-    let previewStep = 0;
-    let visualiserMode = 'celebration'; // 'celebration' or 'idle'
+    function formatGameClock(officialTimeStr, period, delaySec) {
+      if (!officialTimeStr || officialTimeStr === '--:--' || officialTimeStr.toLowerCase().indexOf('final') >= 0) {
+        return officialTimeStr || '--:--';
+      }
+      const parts = officialTimeStr.split(':');
+      if (parts.length === 2) {
+        const mins = parseInt(parts[0]);
+        const secs = parseInt(parts[1]);
+        if (!isNaN(mins) && !isNaN(secs)) {
+          let totalSec = (mins * 60) + secs + delaySec;
+          const maxSec = (period > 3) ? 300 : 1200;
+          if (totalSec > maxSec) totalSec = maxSec;
+          const tMins = Math.floor(totalSec / 60);
+          const tSecs = totalSec % 60;
+          return `${tMins}:${tSecs < 10 ? '0' : ''}${tSecs}`;
+        }
+      }
+      return officialTimeStr;
+    }
 
-    window.setVisualiserMode = function(mode) {
-      visualiserMode = mode;
-      const btnC = document.getElementById('btnPrevCeleb');
-      const btnI = document.getElementById('btnPrevIdle');
-      if (btnC) btnC.classList.toggle('active', mode === 'celebration');
-      if (btnI) btnI.classList.toggle('active', mode === 'idle');
+    // Expandable Visualiser Drawers
+    const activeDrawers = {
+      goal: false,
+      opponent: false,
+      powerplay: false,
+      buzzer: false,
+      intermission: false,
+      win: false
+    };
+
+    window.toggleEventDrawer = function(eventName) {
+      const drawer = document.getElementById('drawer-' + eventName);
+      const arrow = document.getElementById('arrow-' + eventName);
+      if (!drawer) return;
+      const isOpen = (drawer.style.display !== 'none');
+      drawer.style.display = isOpen ? 'none' : 'block';
+      if (arrow) arrow.textContent = isOpen ? '▾' : '▴';
+      activeDrawers[eventName] = !isOpen;
     };
 
     function getTeamColourHex(abbrev) {
@@ -1216,145 +1591,230 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       return t ? t[2] : '#e63946';
     }
 
-    function renderVirtualRing() {
-      const nPixels = Math.max(4, parseInt(document.getElementById('ledPixels').value) || 16);
-      const layout = parseInt(document.getElementById('ledLayout').value) || 0;
-      const effect = parseInt(document.getElementById('effectSelect').value) || 0;
-      const idleEff = parseInt(document.getElementById('idleEffect').value) || 0;
-      const teamHex = getTeamColourHex(teamSelect.value);
-      const isReverse = document.getElementById('chkLedReverse').checked;
-
-      const w = ringCanvas.width;
-      const h = ringCanvas.height;
-      ringCtx.clearRect(0, 0, w, h);
-
+    // Common Multi-Canvas LED Renderer Helper
+    function drawLedShape(ctx, w, h, nPixels, layout, isReverse, getLedState) {
+      ctx.clearRect(0, 0, w, h);
       const cx = w / 2;
       const cy = h / 2;
-      const ledRadius = Math.max(3, Math.min(8, Math.floor(130 / nPixels) + 2));
+      const ledRadius = Math.max(3, Math.min(7, Math.floor(120 / nPixels) + 2));
 
       for (let i = 0; i < nPixels; i++) {
         const mappedIdx = isReverse ? ((nPixels - 1) - i) : i;
         let x = cx;
         let y = cy;
 
-        // 1. Calculate (x, y) based on arrangement geometry
         if (layout === 0) { // Single Ring
-          const radius = 58;
+          const radius = 48;
           const angle = (mappedIdx / nPixels) * (2 * Math.PI) - (Math.PI / 2);
           x = cx + radius * Math.cos(angle);
           y = cy + radius * Math.sin(angle);
-        } else if (layout === 1) { // Spiral Wrap Strip (Cylindrical Beacon)
+        } else if (layout === 1) { // Spiral Wrap Strip
           const turns = 2.4;
           const spiralAngle = (mappedIdx / nPixels) * (turns * 2 * Math.PI) - (Math.PI / 2);
-          const rx = 52;
+          const rx = 45;
           x = cx + rx * Math.cos(spiralAngle);
-          y = (cy + 48) - (mappedIdx / Math.max(1, nPixels - 1)) * 96;
+          y = (cy + 40) - (mappedIdx / Math.max(1, nPixels - 1)) * 80;
         } else if (layout === 2) { // Parallel Columns
           const half = Math.ceil(nPixels / 2);
           const isFirstCol = (mappedIdx < half);
-          const colX = isFirstCol ? (cx - 38) : (cx + 38);
+          const colX = isFirstCol ? (cx - 32) : (cx + 32);
           const colStep = isFirstCol ? mappedIdx : (nPixels - 1 - mappedIdx);
           const colTotal = isFirstCol ? half : (nPixels - half);
           x = colX;
-          y = (cy - 48) + (colStep / Math.max(1, colTotal - 1)) * 96;
-        } else { // 3: Linear Strip / Bar
-          const barWidth = Math.min(180, nPixels * 14);
+          y = (cy - 40) + (colStep / Math.max(1, colTotal - 1)) * 80;
+        } else { // Linear Strip
+          const barWidth = Math.min(180, nPixels * 12);
           x = (cx - barWidth / 2) + (mappedIdx / Math.max(1, nPixels - 1)) * barWidth;
           y = cy;
         }
 
-        let alpha = 0.15;
-        let fill = teamHex;
+        const state = getLedState(i, mappedIdx);
+        ctx.beginPath();
+        ctx.arc(x, y, ledRadius, 0, 2 * Math.PI);
+        ctx.fillStyle = state.fill;
+        ctx.globalAlpha = state.alpha;
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.stroke();
+      }
+    }
 
-        // 2. Calculate animation state
-        if (visualiserMode === 'celebration') {
-          if (effect === 0) { // Rotating Halogen Beacon (Fixed continuous modulo wrap)
-            const head = Math.floor(previewStep / 3) % nPixels;
-            const rawDiff = Math.abs(i - head);
-            const dist = Math.min(rawDiff, nPixels - rawDiff);
-            if (dist === 0) alpha = 1.0;
-            else if (dist === 1) alpha = 0.65;
-            else if (dist === 2) alpha = 0.25;
-            else alpha = 0.05;
-            fill = teamHex;
-          } else if (effect === 1) { // Arena Strobe
-            const flash = (previewStep % 4 < 2);
-            alpha = flash ? 1.0 : 0.05;
-            fill = (previewStep % 8 < 4) ? '#ffffff' : teamHex;
-          } else if (effect === 2) { // Breathe
-            alpha = 0.15 + 0.85 * (Math.sin(previewStep * 0.12) + 1.0) / 2.0;
-            fill = teamHex;
-          } else if (effect === 3) { // Dual Siren
-            const half = Math.floor(nPixels / 2);
-            const isLeft = (i < half);
-            const sideA = ((previewStep % 16) < 8);
-            const flashOn = (previewStep % 4 < 2);
-            if (flashOn && ((sideA && isLeft) || (!sideA && !isLeft))) {
-              alpha = 1.0;
-              fill = isLeft ? teamHex : '#ffffff';
-            } else {
-              alpha = 0.08;
-              fill = isLeft ? teamHex : '#ffffff';
-            }
-          } else if (effect === 4) { // Heartbeat
-            const sub = previewStep % 24;
-            alpha = (sub === 0 || sub === 1 || sub === 2 || sub === 6 || sub === 7 || sub === 8) ? 1.0 : 0.08;
-            fill = teamHex;
-          }
-        } else {
-          // Idle Mode Effects
-          if (idleEff === 0) { // Off
+    let previewStep = 0;
+
+    function renderAllVisualisers() {
+      const nPixels = Math.max(4, parseInt(document.getElementById('ledPixels').value) || 16);
+      const layout = parseInt(document.getElementById('ledLayout').value) || 0;
+      const isReverse = document.getElementById('chkLedReverse').checked;
+      const teamHex = getTeamColourHex(teamSelect.value);
+      const isClassicRed = document.getElementById('chkGoalClassicRed').checked;
+      const goalHex = isClassicRed ? '#e63946' : teamHex;
+
+      // 1. Hardware Geometry & Idle Preview on Lights Tab
+      const ringCanvas = document.getElementById('ringCanvas');
+      if (ringCanvas) {
+        const ringCtx = ringCanvas.getContext('2d');
+        const idleEffRaw = parseInt(document.getElementById('idleEffect').value);
+        const idleEff = isNaN(idleEffRaw) ? 1 : idleEffRaw;
+
+        drawLedShape(ringCtx, ringCanvas.width, ringCanvas.height, nPixels, layout, isReverse, (i) => {
+          let alpha = 0.15;
+          let fill = teamHex;
+          if (idleEff === 0) { // Dark / Off
             alpha = 0.04;
-            fill = '#444444';
+            fill = '#333333';
           } else if (idleEff === 1) { // Breathe
             alpha = 0.12 + 0.65 * (Math.sin(previewStep * 0.05) + 1.0) / 2.0;
             fill = teamHex;
           } else if (idleEff === 2) { // Solid Accent
             alpha = 0.65;
             fill = teamHex;
-          } else if (idleEff === 3) { // Candle / Ember Flicker
+          } else if (idleEff === 3) { // Candle / Ember
             const f1 = Math.sin(previewStep * 0.18 + i * 2.1);
             const f2 = Math.sin(previewStep * 0.35 + i * 4.7);
             alpha = 0.2 + 0.65 * ((f1 + f2 + 2) / 4);
             fill = '#ff7700';
           } else if (idleEff === 4) { // Orbit Sweep
-            const orbitHead = Math.floor(previewStep / 5) % nPixels;
-            const rawDiff = Math.abs(i - orbitHead);
-            const dist = Math.min(rawDiff, nPixels - rawDiff);
-            if (dist === 0) alpha = 0.9;
-            else if (dist === 1) alpha = 0.38;
-            else alpha = 0.06;
+            const head = Math.floor(previewStep / 5) % nPixels;
+            const dist = Math.min(Math.abs(i - head), nPixels - Math.abs(i - head));
+            alpha = (dist === 0) ? 0.9 : ((dist === 1) ? 0.38 : 0.06);
             fill = teamHex;
           }
+          return { fill, alpha };
+        });
+
+        const cap = document.getElementById('previewCaption');
+        if (cap && previewStep % 30 === 0) {
+          const layoutNames = ['Single Ring', 'Spiral Wrap', 'Parallel Columns', 'Linear Strip'];
+          const idleNames = ['Dark / Off', 'Team Colour Breathe', 'Solid Team Accent', 'Candle / Ember Flicker', 'Orbit Sweep'];
+          cap.textContent = `${layoutNames[layout] || 'Ring'} (${nPixels} LEDs) • ${idleNames[idleEff] || 'Idle'}`;
         }
-
-        ringCtx.beginPath();
-        ringCtx.arc(x, y, ledRadius, 0, 2 * Math.PI);
-        ringCtx.fillStyle = fill;
-        ringCtx.globalAlpha = alpha;
-        ringCtx.fill();
-        ringCtx.globalAlpha = 1.0;
-
-        // Subtle outline
-        ringCtx.lineWidth = 1;
-        ringCtx.strokeStyle = 'rgba(255,255,255,0.2)';
-        ringCtx.stroke();
       }
 
-      // Update caption
-      const cap = document.getElementById('previewCaption');
-      if (cap && previewStep % 30 === 0) {
-        const layoutNames = ['Single Ring', 'Spiral Wrap', 'Parallel Columns', 'Linear Strip'];
-        const celebNames = ['Halogen Beacon', 'Arena Strobe', 'Team Breathe', 'Dual Siren', 'Heartbeat Pulse'];
-        const idleNames = ['Dark (Off)', 'Team Breathe', 'Solid Accent', 'Ember Flicker', 'Orbit Sweep'];
-        const activeName = (visualiserMode === 'celebration') ? celebNames[effect] : idleNames[idleEff];
-        cap.textContent = `${activeName} • ${layoutNames[layout] || 'Ring'}`;
+      // 2. Goal Celebration Drawer
+      if (activeDrawers.goal) {
+        const c = document.getElementById('canvas-goal');
+        if (c) {
+          const ctx = c.getContext('2d');
+          const effect = parseInt(document.getElementById('effectSelect').value) || 0;
+          drawLedShape(ctx, c.width, c.height, nPixels, layout, isReverse, (i) => {
+            let alpha = 0.15;
+            let fill = goalHex;
+            if (effect === 0) { // Rotating Beacon
+              const head = Math.floor(previewStep / 3) % nPixels;
+              const dist = Math.min(Math.abs(i - head), nPixels - Math.abs(i - head));
+              alpha = (dist === 0) ? 1.0 : ((dist === 1) ? 0.65 : ((dist === 2) ? 0.25 : 0.05));
+              fill = goalHex;
+            } else if (effect === 1) { // Arena Strobe
+              const flash = (previewStep % 4 < 2);
+              alpha = flash ? 1.0 : 0.05;
+              fill = (previewStep % 8 < 4) ? '#ffffff' : goalHex;
+            } else if (effect === 2) { // Breathe
+              alpha = 0.15 + 0.85 * (Math.sin(previewStep * 0.12) + 1.0) / 2.0;
+              fill = goalHex;
+            } else if (effect === 3) { // Dual Siren
+              const half = Math.floor(nPixels / 2);
+              const isLeft = (i < half);
+              const sideA = ((previewStep % 16) < 8);
+              const flashOn = (previewStep % 4 < 2);
+              if (flashOn && ((sideA && isLeft) || (!sideA && !isLeft))) {
+                alpha = 1.0;
+                fill = isLeft ? goalHex : '#ffffff';
+              } else {
+                alpha = 0.08;
+                fill = isLeft ? goalHex : '#ffffff';
+              }
+            } else if (effect === 4) { // Heartbeat
+              const sub = previewStep % 24;
+              alpha = (sub < 3 || (sub >= 6 && sub < 9)) ? 1.0 : 0.08;
+              fill = goalHex;
+            }
+            return { fill, alpha };
+          });
+
+          const capG = document.getElementById('cap-goal');
+          if (capG && previewStep % 30 === 0) {
+            const celebNames = ['Rotating Halogen Beacon', 'Arena Strobe', 'Colour Breathe', 'Dual Siren', 'Heartbeat Pulse'];
+            const colName = isClassicRed ? 'Classic Red' : 'Team Colours';
+            capG.textContent = `${celebNames[effect] || 'Celebration'} in ${colName}`;
+          }
+        }
+      }
+
+      // 3. Opponent Goal Drawer
+      if (activeDrawers.opponent) {
+        const c = document.getElementById('canvas-opponent');
+        if (c) {
+          const ctx = c.getContext('2d');
+          const flash = (previewStep % 8 < 4);
+          drawLedShape(ctx, c.width, c.height, nPixels, layout, isReverse, () => ({
+            fill: '#ff9800',
+            alpha: flash ? 0.95 : 0.12
+          }));
+        }
+      }
+
+      // 4. Power Play Drawer
+      if (activeDrawers.powerplay) {
+        const c = document.getElementById('canvas-powerplay');
+        if (c) {
+          const ctx = c.getContext('2d');
+          const ppHead = Math.floor(previewStep / 2) % nPixels;
+          drawLedShape(ctx, c.width, c.height, nPixels, layout, isReverse, (i) => {
+            const dist = Math.min(Math.abs(i - ppHead), nPixels - Math.abs(i - ppHead));
+            const alpha = (dist === 0) ? 1.0 : ((dist === 1) ? 0.7 : ((dist === 2) ? 0.35 : 0.08));
+            return { fill: '#ffd700', alpha };
+          });
+        }
+      }
+
+      // 5. Period Buzzer Drawer
+      if (activeDrawers.buzzer) {
+        const c = document.getElementById('canvas-buzzer');
+        if (c) {
+          const ctx = c.getContext('2d');
+          const buzzFlash = (previewStep % 3 === 0);
+          const col = (previewStep % 6 < 3) ? '#ff2222' : '#ffffff';
+          drawLedShape(ctx, c.width, c.height, nPixels, layout, isReverse, () => ({
+            fill: col,
+            alpha: buzzFlash ? 1.0 : 0.06
+          }));
+        }
+      }
+
+      // 6. Intermission Drawer
+      if (activeDrawers.intermission) {
+        const c = document.getElementById('canvas-intermission');
+        if (c) {
+          const ctx = c.getContext('2d');
+          const alpha = 0.15 + 0.65 * (Math.sin(previewStep * 0.04) + 1.0) / 2.0;
+          drawLedShape(ctx, c.width, c.height, nPixels, layout, isReverse, () => ({
+            fill: teamHex,
+            alpha
+          }));
+        }
+      }
+
+      // 7. Victory Fanfare Drawer
+      if (activeDrawers.win) {
+        const c = document.getElementById('canvas-win');
+        if (c) {
+          const ctx = c.getContext('2d');
+          drawLedShape(ctx, c.width, c.height, nPixels, layout, isReverse, (i) => {
+            const hue = (previewStep * 5 + (i * 360 / nPixels)) % 360;
+            return {
+              fill: 'hsl(' + hue + ', 100%, 55%)',
+              alpha: 0.95
+            };
+          });
+        }
       }
 
       previewStep++;
-      requestAnimationFrame(renderVirtualRing);
+      requestAnimationFrame(renderAllVisualisers);
     }
-    requestAnimationFrame(renderVirtualRing);
+    requestAnimationFrame(renderAllVisualisers);
 
     // Wi-Fi Scanning & Password Controls
     const wifiSelect = document.getElementById('wifiSelect');
@@ -1508,16 +1968,20 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
           hornVal.textContent = cfg.hornDuration + 's';
         }
         if (cfg.effectStyle !== undefined) document.getElementById('effectSelect').value = cfg.effectStyle;
+        if (cfg.goalClassicRed !== undefined) document.getElementById('chkGoalClassicRed').checked = !!cfg.goalClassicRed;
 
         document.getElementById('chkOpponent').checked = !!cfg.alertOpponent;
+        if (cfg.alertOpponentSound !== undefined) document.getElementById('chkOpponentSound').checked = !!cfg.alertOpponentSound;
         document.getElementById('chkPowerPlay').checked = !!cfg.alertPowerPlay;
+        if (cfg.alertPowerPlaySound !== undefined) document.getElementById('chkPowerPlaySound').checked = !!cfg.alertPowerPlaySound;
         document.getElementById('chkBuzzer').checked = !!cfg.alertBuzzer;
+        if (cfg.alertBuzzerSound !== undefined) document.getElementById('chkBuzzerSound').checked = !!cfg.alertBuzzerSound;
         if (cfg.alertIntermission !== undefined) document.getElementById('chkIntermission').checked = !!cfg.alertIntermission;
         document.getElementById('chkWin').checked = !!cfg.alertWin;
+        if (cfg.alertWinSound !== undefined) document.getElementById('chkWinSound').checked = !!cfg.alertWinSound;
 
         if (cfg.broadcastDelay !== undefined) {
-          delaySlider.value = cfg.broadcastDelay;
-          delaySlider.oninput();
+          updateDelayDisplays(cfg.broadcastDelay);
         }
 
         if (cfg.ssid) {
@@ -1595,6 +2059,21 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             document.getElementById('syncNhlClock').textContent = s.game.timeRemaining || 'In Progress';
             document.getElementById('syncNhlPeriod').textContent = `Period ${s.game.period}`;
 
+            // Sync Card on Live Tab
+            const lastPlayEl = document.getElementById('liveLastPlay');
+            if (lastPlayEl) {
+              lastPlayEl.textContent = s.game.lastPlay || '⏳ Waiting for live game action / puck drop...';
+            }
+            const offClockEl = document.getElementById('liveOfficialClock');
+            if (offClockEl) offClockEl.textContent = s.game.timeRemaining || 'In Progress';
+            const offPerEl = document.getElementById('liveOfficialPeriod');
+            if (offPerEl) offPerEl.textContent = `Period ${s.game.period}`;
+
+            const curDelay = parseInt(liveDelaySlider ? liveDelaySlider.value : delaySlider.value) || 0;
+            const targetTv = formatGameClock(s.game.timeRemaining, s.game.period, curDelay);
+            const targetEl = document.getElementById('liveTargetTvClock');
+            if (targetEl) targetEl.textContent = targetTv;
+
             const interm = !!s.game.inIntermission;
             document.getElementById('liveIntermissionNote').style.display = interm ? 'inline' : 'none';
             document.getElementById('liveStatusSubtext').textContent = interm ? 'Intermission in progress.' : 'Live game active.';
@@ -1605,12 +2084,28 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             document.getElementById('liveGameClock').textContent = 'No Live Game';
             document.getElementById('syncNhlClock').textContent = '--:--';
             document.getElementById('syncNhlPeriod').textContent = 'No Live Game Right Now';
+            const lastPlayEl = document.getElementById('liveLastPlay');
+            if (lastPlayEl) lastPlayEl.textContent = 'No game currently active.';
+            const offClockEl = document.getElementById('liveOfficialClock');
+            if (offClockEl) offClockEl.textContent = '--:--';
+            const offPerEl = document.getElementById('liveOfficialPeriod');
+            if (offPerEl) offPerEl.textContent = 'No Live Game';
+            const targetEl = document.getElementById('liveTargetTvClock');
+            if (targetEl) targetEl.textContent = '--:--';
             document.getElementById('liveIntermissionNote').style.display = 'none';
             document.getElementById('liveStatusSubtext').textContent = 'No game currently in progress.';
           } else {
             badge.className = 'badge';
             badge.textContent = 'AP Setup Mode (192.168.4.1)';
             document.getElementById('liveGameClock').textContent = 'Setup Mode';
+            const lastPlayEl = document.getElementById('liveLastPlay');
+            if (lastPlayEl) lastPlayEl.textContent = 'Connect device to home Wi-Fi.';
+            const offClockEl = document.getElementById('liveOfficialClock');
+            if (offClockEl) offClockEl.textContent = '--:--';
+            const offPerEl = document.getElementById('liveOfficialPeriod');
+            if (offPerEl) offPerEl.textContent = 'Setup Mode';
+            const targetEl = document.getElementById('liveTargetTvClock');
+            if (targetEl) targetEl.textContent = '--:--';
             document.getElementById('liveStatusSubtext').textContent = 'Configure home Wi-Fi to start.';
           }
 
@@ -1772,6 +2267,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         return;
       }
 
+      const idleVal = parseInt(document.getElementById('idleEffect').value);
       const data = {
         deviceName: document.getElementById('deviceNameInput').value.trim() || 'NHL Goal Light',
         team: teamSelect.value,
@@ -1781,17 +2277,22 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         numLeds: parseInt(document.getElementById('ledPixels').value) || 16,
         ledLayout: parseInt(document.getElementById('ledLayout').value) || 0,
         ledReverse: document.getElementById('chkLedReverse').checked,
-        idleEffect: parseInt(document.getElementById('idleEffect').value) || 1,
+        idleEffect: isNaN(idleVal) ? 1 : idleVal,
         brightness: parseInt(brightSlider.value),
         volume: parseInt(volSlider.value),
         hornDuration: parseInt(hornSlider.value),
         effectStyle: parseInt(document.getElementById('effectSelect').value),
+        goalClassicRed: document.getElementById('chkGoalClassicRed').checked,
         alertOpponent: document.getElementById('chkOpponent').checked,
+        alertOpponentSound: document.getElementById('chkOpponentSound').checked,
         alertPowerPlay: document.getElementById('chkPowerPlay').checked,
+        alertPowerPlaySound: document.getElementById('chkPowerPlaySound').checked,
         alertBuzzer: document.getElementById('chkBuzzer').checked,
+        alertBuzzerSound: document.getElementById('chkBuzzerSound').checked,
         alertIntermission: document.getElementById('chkIntermission').checked,
         alertWin: document.getElementById('chkWin').checked,
-        broadcastDelay: parseInt(delaySlider.value) || 0,
+        alertWinSound: document.getElementById('chkWinSound').checked,
+        broadcastDelay: parseInt(liveDelaySlider ? liveDelaySlider.value : delaySlider.value) || 0,
         ssid: targetSsid,
         pass: wifiPass.value,
         apPass: apPass.value

@@ -24,6 +24,7 @@ struct GameStatus {
   String timeRemaining;
   bool inIntermission;
   String situationCode;
+  String lastPlay;
 };
 
 struct UpcomingGame {
@@ -303,7 +304,7 @@ private:
   }
 
   bool pollBoxscore(bool &outOpponentGoal, bool &outGameWin, bool &outPeriodStart) {
-    String url = "https://api-web.nhle.com/v1/gamecenter/" + String(currentStatus.gameId) + "/boxscore";
+    String url = "https://api-web.nhle.com/v1/gamecenter/" + String(currentStatus.gameId) + "/landing";
 
     WiFiClientSecure client;
     client.setInsecure();
@@ -315,36 +316,12 @@ private:
 
     int code = http.GET();
     if (code != 200) {
-      Serial.printf("[NHL] Boxscore HTTP error: %d\n", code);
+      Serial.printf("[NHL] Landing HTTP error: %d\n", code);
       http.end();
       return false;
     }
 
-    // Read payload up until "playerByGameStats" to save RAM
-    WiFiClient *stream = http.getStreamPtr();
-    String payload;
-    payload.reserve(8000);
-    const char* stopMarker = "\"playerByGameStats\"";
-    int stopLen = strlen(stopMarker);
-    String window = "";
-
-    unsigned long startRead = millis();
-    while (http.connected() || stream->available()) {
-      while (stream->available()) {
-        char c = (char)stream->read();
-        payload += c;
-        window += c;
-        if (window.length() > stopLen) {
-          window.remove(0, window.length() - stopLen);
-        }
-        if (window == stopMarker) {
-          break;
-        }
-      }
-      if (window == stopMarker) break;
-      if (millis() - startRead > 8000) break;
-      delay(1);
-    }
+    String payload = http.getString();
     http.end();
 
     // Parse gameState
@@ -363,6 +340,95 @@ private:
     currentStatus.homeScore = extractInt(homeBlock, "\"score\":", 0);
     currentStatus.awayScore = extractInt(awayBlock, "\"score\":", 0);
 
+    // Parse Period & Clock
+    String clockBlock = extractObject(payload, "\"clock\":", 0);
+    String periodBlock = extractObject(payload, "\"periodDescriptor\":", 0);
+
+    if (clockBlock.length() > 0) {
+      currentStatus.timeRemaining = extractString(clockBlock, "\"timeRemaining\":\"", 0);
+      currentStatus.inIntermission = (clockBlock.indexOf("\"inIntermission\":true") >= 0);
+    }
+    if (periodBlock.length() > 0) {
+      currentStatus.period = extractInt(periodBlock, "\"number\":", 0);
+    }
+    if (currentStatus.period <= 0) currentStatus.period = 1;
+    if (currentStatus.timeRemaining.length() == 0) {
+      currentStatus.timeRemaining = currentStatus.inIntermission ? "Intermission" : "20:00";
+    }
+
+    // Extract Last Play (most recent milestone goal or penalty for TV sync calibration)
+    int lastGoalPer = 0;
+    String lastGoalTime = "";
+    String lastGoalDesc = "";
+    int lastPenPer = 0;
+    String lastPenTime = "";
+    String lastPenDesc = "";
+
+    int scoreIdx = payload.indexOf("\"scoring\":[");
+    if (scoreIdx >= 0) {
+      int penIdx = payload.indexOf("\"penalties\":[", scoreIdx);
+      int scoreEnd = (penIdx > scoreIdx) ? penIdx : payload.length();
+      int lastGoalTip = payload.lastIndexOf("\"timeInPeriod\":\"", scoreEnd);
+      if (lastGoalTip > scoreIdx) {
+        String tip = extractString(payload, "\"timeInPeriod\":\"", lastGoalTip - 1);
+        int goalObjStart = payload.lastIndexOf("{", lastGoalTip);
+        String goalObj = extractObject(payload, "{", goalObjStart);
+        String tm = extractString(goalObj, "\"default\":\"", goalObj.indexOf("\"teamAbbrev\":"));
+        if (tm.length() == 0) tm = extractString(goalObj, "\"team\":\"", 0);
+        String player = extractString(goalObj, "\"default\":\"", goalObj.indexOf("\"name\":"));
+        if (player.length() == 0) player = extractString(goalObj, "\"default\":\"", goalObj.indexOf("\"lastName\":"));
+        String strength = extractString(goalObj, "\"strength\":\"", 0);
+        if (strength.length() > 0 && strength != "ev") strength = " (" + strength + ")";
+        else strength = "";
+
+        int pNumIdx = payload.lastIndexOf("\"number\":", lastGoalTip);
+        lastGoalPer = (pNumIdx > scoreIdx) ? extractInt(payload, "\"number\":", pNumIdx) : currentStatus.period;
+        lastGoalTime = tip;
+        lastGoalDesc = "P" + String(lastGoalPer) + " " + tip + " - Goal: " + tm + " " + player + strength;
+      }
+    }
+
+    int penIdx = payload.indexOf("\"penalties\":[");
+    if (penIdx >= 0) {
+      int lastPenTip = payload.lastIndexOf("\"timeInPeriod\":\"");
+      if (lastPenTip > penIdx) {
+        String tip = extractString(payload, "\"timeInPeriod\":\"", lastPenTip - 1);
+        int penObjStart = payload.lastIndexOf("{", lastPenTip);
+        String penObj = extractObject(payload, "{", penObjStart);
+        String tm = extractString(penObj, "\"default\":\"", penObj.indexOf("\"teamAbbrev\":"));
+        String infraction = extractString(penObj, "\"descKey\":\"", 0);
+        int duration = extractInt(penObj, "\"duration\":", 0);
+        if (infraction.length() == 0) infraction = "penalty";
+        infraction.replace("-", " ");
+        if (infraction.length() > 0) infraction[0] = toupper(infraction[0]);
+
+        int pNumIdx = payload.lastIndexOf("\"number\":", lastPenTip);
+        lastPenPer = (pNumIdx > penIdx) ? extractInt(payload, "\"number\":", pNumIdx) : currentStatus.period;
+        lastPenTime = tip;
+        lastPenDesc = "P" + String(lastPenPer) + " " + tip + " - Penalty: " + tm + " " + infraction + " (" + String(duration > 0 ? duration : 2) + "m)";
+      }
+    }
+
+    if (lastGoalDesc.length() > 0 && lastPenDesc.length() > 0) {
+      if (lastGoalPer > lastPenPer || (lastGoalPer == lastPenPer && lastGoalTime >= lastPenTime)) {
+        currentStatus.lastPlay = lastGoalDesc;
+      } else {
+        currentStatus.lastPlay = lastPenDesc;
+      }
+    } else if (lastGoalDesc.length() > 0) {
+      currentStatus.lastPlay = lastGoalDesc;
+    } else if (lastPenDesc.length() > 0) {
+      currentStatus.lastPlay = lastPenDesc;
+    } else if (currentStatus.state == STATE_LIVE) {
+      currentStatus.lastPlay = "P" + String(currentStatus.period) + " " + currentStatus.timeRemaining + " - Live Play in Progress";
+    } else if (currentStatus.state == STATE_FINAL) {
+      currentStatus.lastPlay = "Game Final: " + currentStatus.awayAbbrev + " " + String(currentStatus.awayScore) + " - " + currentStatus.homeAbbrev + " " + String(currentStatus.homeScore);
+    } else if (currentStatus.state == STATE_PREGAME) {
+      currentStatus.lastPlay = "Pre-Game Warmups in Progress";
+    } else {
+      currentStatus.lastPlay = "No Live Plays Recorded Yet";
+    }
+
     int watchedScore = (currentStatus.homeAbbrev == teamAbbrev) ? currentStatus.homeScore : currentStatus.awayScore;
     int opponentScore = (currentStatus.homeAbbrev == teamAbbrev) ? currentStatus.awayScore : currentStatus.homeScore;
 
@@ -373,7 +439,8 @@ private:
       lastWatchedScore = watchedScore;
       lastOpponentScore = opponentScore;
       initialSnapshot = false;
-      Serial.printf("[NHL] Snapshot captured: %s %d - %d\n", teamAbbrev.c_str(), watchedScore, opponentScore);
+      Serial.printf("[NHL] Snapshot captured: %s %d - %d | Last play: %s\n",
+                    teamAbbrev.c_str(), watchedScore, opponentScore, currentStatus.lastPlay.c_str());
       return false;
     }
 

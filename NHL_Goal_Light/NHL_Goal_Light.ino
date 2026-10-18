@@ -613,11 +613,16 @@ void setupWebServer() {
     json += "\"volume\":" + String(config.volume_index) + ",";
     json += "\"hornDuration\":" + String(config.celebration_sec) + ",";
     json += "\"effectStyle\":" + String(config.effect_style) + ",";
+    json += "\"goalClassicRed\":" + String(config.goal_classic_red ? "true" : "false") + ",";
     json += "\"alertOpponent\":" + String(config.alert_opponent_goal ? "true" : "false") + ",";
+    json += "\"alertOpponentSound\":" + String(config.alert_opponent_sound ? "true" : "false") + ",";
     json += "\"alertPowerPlay\":" + String(config.alert_power_play ? "true" : "false") + ",";
+    json += "\"alertPowerPlaySound\":" + String(config.alert_power_play_sound ? "true" : "false") + ",";
     json += "\"alertBuzzer\":" + String(config.alert_period_buzzer ? "true" : "false") + ",";
+    json += "\"alertBuzzerSound\":" + String(config.alert_period_buzzer_sound ? "true" : "false") + ",";
     json += "\"alertIntermission\":" + String(config.alert_intermission ? "true" : "false") + ",";
     json += "\"alertWin\":" + String(config.alert_game_win ? "true" : "false") + ",";
+    json += "\"alertWinSound\":" + String(config.alert_game_win_sound ? "true" : "false") + ",";
     json += "\"broadcastDelay\":" + String(config.broadcast_delay_sec) + ",";
     json += "\"ssid\":\"" + String(config.wifi_ssid) + "\",";
     json += "\"apPass\":\"" + String(config.ap_password) + "\"";
@@ -705,21 +710,37 @@ void setupWebServer() {
         config.effect_style = body.substring(ePos + 14).toInt();
       }
 
-      // Event Toggles
+      if (body.indexOf("\"goalClassicRed\":") >= 0) {
+        config.goal_classic_red = (body.indexOf("\"goalClassicRed\":true") >= 0);
+      }
+
+      // Event Toggles & Options
       if (body.indexOf("\"alertOpponent\":") >= 0) {
         config.alert_opponent_goal = (body.indexOf("\"alertOpponent\":true") >= 0);
+      }
+      if (body.indexOf("\"alertOpponentSound\":") >= 0) {
+        config.alert_opponent_sound = (body.indexOf("\"alertOpponentSound\":true") >= 0);
       }
       if (body.indexOf("\"alertPowerPlay\":") >= 0) {
         config.alert_power_play = (body.indexOf("\"alertPowerPlay\":true") >= 0);
       }
+      if (body.indexOf("\"alertPowerPlaySound\":") >= 0) {
+        config.alert_power_play_sound = (body.indexOf("\"alertPowerPlaySound\":true") >= 0);
+      }
       if (body.indexOf("\"alertBuzzer\":") >= 0) {
         config.alert_period_buzzer = (body.indexOf("\"alertBuzzer\":true") >= 0);
+      }
+      if (body.indexOf("\"alertBuzzerSound\":") >= 0) {
+        config.alert_period_buzzer_sound = (body.indexOf("\"alertBuzzerSound\":true") >= 0);
       }
       if (body.indexOf("\"alertIntermission\":") >= 0) {
         config.alert_intermission = (body.indexOf("\"alertIntermission\":true") >= 0);
       }
       if (body.indexOf("\"alertWin\":") >= 0) {
         config.alert_game_win = (body.indexOf("\"alertWin\":true") >= 0);
+      }
+      if (body.indexOf("\"alertWinSound\":") >= 0) {
+        config.alert_game_win_sound = (body.indexOf("\"alertWinSound\":true") >= 0);
       }
 
       // TV Broadcast Delay
@@ -759,8 +780,8 @@ void setupWebServer() {
         strncpy(config.ap_password, ap.c_str(), sizeof(config.ap_password));
       }
 
-      Serial.printf("[Config-POST] Wi-Fi SSID: '%s', Pass len: %d, Device: '%s', Team: '%s'\n",
-                    config.wifi_ssid, strlen(config.wifi_pass), config.device_name, config.primary_team);
+      Serial.printf("[Config-POST] Wi-Fi SSID: '%s', Pass len: %d, Device: '%s', Team: '%s', Red: %d\n",
+                    config.wifi_ssid, strlen(config.wifi_pass), config.device_name, config.primary_team, config.goal_classic_red);
 
       // Apply runtime configuration
       leds.configure(config);
@@ -779,7 +800,7 @@ void setupWebServer() {
     server.send(400, "text/plain", "Bad Request");
   });
 
-  // REST API: Quick Levels Live Adjustment (Brightness & Volume with Chirp)
+  // REST API: Quick Levels Live Adjustment (Brightness & Volume with Chirp, Broadcast Delay)
   server.on("/api/quick-set", HTTP_POST, []() {
     if (server.hasArg("plain")) {
       String body = server.arg("plain");
@@ -799,7 +820,17 @@ void setupWebServer() {
         if (v >= 0 && v <= 5) {
           config.volume_index = (uint8_t)v;
           audio.setVolumeIndex(config.volume_index);
-          prefs.putUChar("volume", config.volume_index);
+          prefs.putUChar("vol", config.volume_index);
+        }
+      }
+
+      int bdPos = body.indexOf("\"broadcastDelay\":");
+      if (bdPos >= 0) {
+        int bd = body.substring(bdPos + 17).toInt();
+        if (bd >= 0 && bd <= 180) {
+          config.broadcast_delay_sec = (uint16_t)bd;
+          prefs.putUShort("b_delay", config.broadcast_delay_sec);
+          Serial.printf("[Sync] Live Broadcast Delay updated: %d seconds\n", config.broadcast_delay_sec);
         }
       }
 
@@ -860,7 +891,7 @@ void setupWebServer() {
       if (horn && config.hw_speaker_enabled) audio.play(TRACK_PERIOD_HORN);
     } else { // default goal celebration
       if (horn && config.hw_speaker_enabled) {
-        audio.play(TRACK_GOAL_HORN);
+        audio.play(TRACK_GOAL_HORN, config.celebration_sec * 1000UL);
       }
       if (light && config.hw_lights_enabled) {
         LedMode mode = LED_BEACON_GOAL;
@@ -902,7 +933,9 @@ void setupWebServer() {
     json += "\"awayScore\":" + String(gs.awayScore) + ",";
     json += "\"period\":" + String(gs.period) + ",";
     json += "\"timeRemaining\":\"" + gs.timeRemaining + "\",";
-    json += "\"inIntermission\":" + String(gs.inIntermission ? "true" : "false");
+    json += "\"inIntermission\":" + String(gs.inIntermission ? "true" : "false") + ",";
+    json += "\"lastPlay\":\"" + gs.lastPlay + "\",";
+    json += "\"broadcastDelay\":" + String(config.broadcast_delay_sec);
     json += "},";
     json += "\"upcoming\":{";
     json += "\"valid\":" + String(up.valid ? "true" : "false") + ",";
@@ -1006,12 +1039,17 @@ void loadConfiguration() {
   config.volume_index = prefs.getUChar("vol", DEFAULT_VOLUME_IDX);
   config.celebration_sec = prefs.getUChar("dur", DEFAULT_HORN_SEC);
   config.effect_style = prefs.getUChar("effect", 0);
+  config.goal_classic_red = prefs.getBool("goal_red", false);
 
   config.alert_opponent_goal = prefs.getBool("opp", false);
+  config.alert_opponent_sound = prefs.getBool("opp_snd", true);
   config.alert_power_play = prefs.getBool("pp", true);
+  config.alert_power_play_sound = prefs.getBool("pp_snd", true);
   config.alert_period_buzzer = prefs.getBool("buzzer", true);
+  config.alert_period_buzzer_sound = prefs.getBool("buzz_snd", true);
   config.alert_intermission = prefs.getBool("interm", true);
   config.alert_game_win = prefs.getBool("win", true);
+  config.alert_game_win_sound = prefs.getBool("win_snd", true);
 
   config.broadcast_delay_sec = prefs.getUShort("b_delay", 0);
 
@@ -1041,12 +1079,17 @@ void saveConfiguration() {
   prefs.putUChar("vol", config.volume_index);
   prefs.putUChar("dur", config.celebration_sec);
   prefs.putUChar("effect", config.effect_style);
+  prefs.putBool("goal_red", config.goal_classic_red);
 
   prefs.putBool("opp", config.alert_opponent_goal);
+  prefs.putBool("opp_snd", config.alert_opponent_sound);
   prefs.putBool("pp", config.alert_power_play);
+  prefs.putBool("pp_snd", config.alert_power_play_sound);
   prefs.putBool("buzzer", config.alert_period_buzzer);
+  prefs.putBool("buzz_snd", config.alert_period_buzzer_sound);
   prefs.putBool("interm", config.alert_intermission);
   prefs.putBool("win", config.alert_game_win);
+  prefs.putBool("win_snd", config.alert_game_win_sound);
 
   prefs.putUShort("b_delay", config.broadcast_delay_sec);
 

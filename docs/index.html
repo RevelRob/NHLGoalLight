@@ -469,7 +469,7 @@
         <div class="feature-card">
           <div class="feature-icon">🔊</div>
           <h3>Arena Goal Horn & Sound Effects</h3>
-          <p>Optional DFPlayer Mini audio integration for authentic arena goal horns and team fight songs. Plays right through your 3W speaker or external home audio setup.</p>
+          <p>MAX98357A I2S Class-D DAC audio integration for authentic arena goal horns, period buzzers, and team victory fanfares. Plays right through your 3W speaker (with or without MicroSD module).</p>
         </div>
 
         <div class="feature-card">
@@ -539,22 +539,22 @@
           <ul class="parts-list">
             <li>
               <div>
-                <span class="part-name">DFPlayer Mini MP3 Player</span>
-                <span class="part-desc">Serial MP3 module for arena goal horn sounds and fight songs (~$2)</span>
+                <span class="part-name">MAX98357A I2S Class-D DAC Amplifier</span>
+                <span class="part-desc">I2S digital audio DAC & 3.2W amplifier for synthesized arena horns & buzzers (~$2-$3)</span>
               </div>
               <span class="part-tag.optional part-tag">Optional</span>
             </li>
             <li>
               <div>
                 <span class="part-name">3W 4Ω/8Ω Mini Speaker</span>
-                <span class="part-desc">Small speaker for enclosure mounting (~$1-$2)</span>
+                <span class="part-desc">Small speaker for enclosure mounting (connects to MAX98357A +/- terminals) (~$1-$2)</span>
               </div>
               <span class="part-tag.optional part-tag">Optional</span>
             </li>
             <li>
               <div>
-                <span class="part-name">MicroSD Card (1GB - 32GB)</span>
-                <span class="part-desc">FAT32 formatted card to store team goal horn sound files</span>
+                <span class="part-name">MicroSD SPI Card Module (Optional)</span>
+                <span class="part-desc">Allows loading custom WAV team goal horn sound files (~$1)</span>
               </div>
               <span class="part-tag.optional part-tag">Optional</span>
             </li>
@@ -626,28 +626,40 @@
               <td>Pressing button pulls GPIO 9 to GND to trigger test</td>
             </tr>
             <tr>
-              <td><strong>DFPlayer Mini (Optional)</strong></td>
-              <td><span class="pin-badge">VCC</span></td>
+              <td><strong>MAX98357A I2S DAC (Optional)</strong></td>
+              <td><span class="pin-badge">Vin</span></td>
               <td><span class="pin-badge">5V</span></td>
-              <td>5V power rail</td>
+              <td>5V power rail for 3W Class-D amplifier</td>
             </tr>
             <tr>
-              <td><strong>DFPlayer Mini (Optional)</strong></td>
+              <td><strong>MAX98357A I2S DAC (Optional)</strong></td>
               <td><span class="pin-badge">GND</span></td>
               <td><span class="pin-badge">GND</span></td>
               <td>Common ground</td>
             </tr>
             <tr>
-              <td><strong>DFPlayer Mini (Optional)</strong></td>
-              <td><span class="pin-badge">RX</span></td>
-              <td><span class="pin-badge">GPIO 1 (TX)</span></td>
-              <td>Serial transmit from ESP32 (recommended 1kΩ resistor in series)</td>
+              <td><strong>MAX98357A I2S DAC (Optional)</strong></td>
+              <td><span class="pin-badge">BCLK</span></td>
+              <td><span class="pin-badge">GPIO 1</span></td>
+              <td>Bit Clock (I2S SCK)</td>
             </tr>
             <tr>
-              <td><strong>DFPlayer Mini (Optional)</strong></td>
-              <td><span class="pin-badge">TX</span></td>
-              <td><span class="pin-badge">GPIO 2 (RX)</span></td>
-              <td>Serial receive into ESP32</td>
+              <td><strong>MAX98357A I2S DAC (Optional)</strong></td>
+              <td><span class="pin-badge">LRC</span></td>
+              <td><span class="pin-badge">GPIO 2</span></td>
+              <td>Word Select / Left-Right Clock (I2S WS)</td>
+            </tr>
+            <tr>
+              <td><strong>MAX98357A I2S DAC (Optional)</strong></td>
+              <td><span class="pin-badge">DIN</span></td>
+              <td><span class="pin-badge">GPIO 3</span></td>
+              <td>Serial Data In (I2S DOUT)</td>
+            </tr>
+            <tr>
+              <td><strong>MicroSD Module (Optional SPI)</strong></td>
+              <td><span class="pin-badge">CS / MOSI / CLK / MISO</span></td>
+              <td><span class="pin-badge">GPIO 10 / 11 / 12 / 13</span></td>
+              <td>Standard SPI bus interface (when hardware SD storage expansion is enabled)</td>
             </tr>
           </tbody>
         </table>

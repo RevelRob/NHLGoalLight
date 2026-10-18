@@ -35,6 +35,7 @@ private:
   uint8_t layout;
   uint8_t idleEffect;
   bool lightsEnabled;
+  bool goalClassicRed;
   const TeamData* activeTeam;
 
 public:
@@ -50,6 +51,7 @@ public:
                 layout(0),
                 idleEffect(1),
                 lightsEnabled(true),
+                goalClassicRed(false),
                 activeTeam(&NHL_TEAMS[18]) {} // Default to Toronto Maple Leafs (TOR)
 
   void begin() {
@@ -64,6 +66,7 @@ public:
     reverseDirection = cfg.led_reverse;
     layout = cfg.led_layout;
     idleEffect = cfg.idle_effect;
+    goalClassicRed = cfg.goal_classic_red;
     setBrightness(cfg.brightness);
 
     uint16_t targetLeds = cfg.num_leds;
@@ -75,7 +78,8 @@ public:
       strip.updateLength(numLeds);
     }
 
-    if (!lightsEnabled) {
+    if (!lightsEnabled || idleEffect == 0) {
+      setMode(LED_OFF);
       strip.clear();
       strip.show();
     } else if (!isCelebrating() && currentMode != LED_AP_CONFIG) {
@@ -126,8 +130,11 @@ public:
 
   void update() {
     if (!lightsEnabled && currentMode != LED_AP_CONFIG) {
-      strip.clear();
-      strip.show();
+      if (animStep == 0) {
+        strip.clear();
+        strip.show();
+        animStep = 1;
+      }
       return;
     }
 
@@ -141,8 +148,11 @@ public:
 
     switch (currentMode) {
       case LED_OFF:
-        strip.clear();
-        strip.show();
+        if (animStep == 0) {
+          strip.clear();
+          strip.show();
+          animStep = 1;
+        }
         break;
 
       case LED_AP_CONFIG:
@@ -200,6 +210,10 @@ public:
   }
 
 private:
+  inline uint8_t goalR() const { return goalClassicRed ? 245 : activeTeam->primaryR; }
+  inline uint8_t goalG() const { return goalClassicRed ? 15  : activeTeam->primaryG; }
+  inline uint8_t goalB() const { return goalClassicRed ? 15  : activeTeam->primaryB; }
+
   int mapLedIndex(int idx) {
     if (numLeds == 0) return 0;
     int safeIdx = idx % numLeds;
@@ -225,9 +239,9 @@ private:
       float intensity = 1.0f - (distance * distance * 0.85f);
       if (intensity < 0.1f) intensity = 0.1f;
 
-      uint8_t r = (uint8_t)(activeTeam->primaryR * intensity);
-      uint8_t g = (uint8_t)(activeTeam->primaryG * intensity);
-      uint8_t b = (uint8_t)(activeTeam->primaryB * intensity);
+      uint8_t r = (uint8_t)(goalR() * intensity);
+      uint8_t g = (uint8_t)(goalG() * intensity);
+      uint8_t b = (uint8_t)(goalB() * intensity);
 
       // Core focus receives bright white highlight
       if (offset == 0) {
@@ -259,9 +273,9 @@ private:
           strip.setPixelColor(i, strip.Color(255, 255, 255));
         }
       } else if (phase == 1) {
-        // Team colour flash
+        // Goal colour flash
         for (int i = 0; i < numLeds; i++) {
-          strip.setPixelColor(i, strip.Color(activeTeam->primaryR, activeTeam->primaryG, activeTeam->primaryB));
+          strip.setPixelColor(i, strip.Color(goalR(), goalG(), goalB()));
         }
       } else {
         // Alternating split
@@ -269,7 +283,7 @@ private:
           if (i % 2 == 0) {
             strip.setPixelColor(i, strip.Color(255, 255, 255));
           } else {
-            strip.setPixelColor(i, strip.Color(activeTeam->primaryR, activeTeam->primaryG, activeTeam->primaryB));
+            strip.setPixelColor(i, strip.Color(goalR(), goalG(), goalB()));
           }
         }
       }
@@ -288,15 +302,15 @@ private:
     uint8_t factor = (uint8_t)constrain(val, 20.0, 255.0);
 
     for (int i = 0; i < numLeds; i++) {
-      uint8_t r = (activeTeam->primaryR * factor) / 255;
-      uint8_t g = (activeTeam->primaryG * factor) / 255;
-      uint8_t b = (activeTeam->primaryB * factor) / 255;
+      uint8_t r = (goalR() * factor) / 255;
+      uint8_t g = (goalG() * factor) / 255;
+      uint8_t b = (goalB() * factor) / 255;
       strip.setPixelColor(i, strip.Color(r, g, b));
     }
     strip.show();
   }
 
-  // 4. Dual Siren Flasher: Authentic emergency lightbar wig-wag (left half team colour, right half white)
+  // 4. Dual Siren Flasher: Authentic emergency lightbar wig-wag (left half goal colour, right half white)
   void renderDualSiren(unsigned long now) {
     if (now - lastFrameTime < 60) return;
     lastFrameTime = now;
@@ -315,7 +329,7 @@ private:
       for (int i = start; i < end; i++) {
         int idx = mapLedIndex(i);
         if (sideA) {
-          strip.setPixelColor(idx, strip.Color(activeTeam->primaryR, activeTeam->primaryG, activeTeam->primaryB));
+          strip.setPixelColor(idx, strip.Color(goalR(), goalG(), goalB()));
         } else {
           strip.setPixelColor(idx, strip.Color(255, 255, 255));
         }
@@ -344,9 +358,9 @@ private:
 
     uint8_t factor = (uint8_t)constrain(intensity * 255.0f, 12.0f, 255.0f);
     for (int i = 0; i < numLeds; i++) {
-      uint8_t r = (activeTeam->primaryR * factor) / 255;
-      uint8_t g = (activeTeam->primaryG * factor) / 255;
-      uint8_t b = (activeTeam->primaryB * factor) / 255;
+      uint8_t r = (goalR() * factor) / 255;
+      uint8_t g = (goalG() * factor) / 255;
+      uint8_t b = (goalB() * factor) / 255;
       strip.setPixelColor(i, strip.Color(r, g, b));
     }
     strip.show();
