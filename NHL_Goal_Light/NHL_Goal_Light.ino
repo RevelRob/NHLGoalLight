@@ -470,16 +470,39 @@ void setupNetwork() {
   }
 }
 
+struct CloudOtaProgress {
+  volatile bool inProgress = false;
+  volatile int percent = 0;
+  volatile size_t bytesWritten = 0;
+  volatile size_t totalBytes = 0;
+  volatile bool success = false;
+  volatile bool failed = false;
+  String message = "";
+};
+CloudOtaProgress otaProgress;
+String cloudOtaTargetUrl = "";
+
 bool performCloudOta(const String &url) {
+  otaProgress.inProgress = true;
+  otaProgress.percent = 0;
+  otaProgress.bytesWritten = 0;
+  otaProgress.totalBytes = 0;
+  otaProgress.success = false;
+  otaProgress.failed = false;
+  otaProgress.message = "Connecting to firmware server...";
+
   Serial.printf("[Cloud-OTA] Connecting to: %s\n", url.c_str());
   WiFiClientSecure client;
   client.setInsecure();
 
   HTTPClient http;
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-  http.setTimeout(45000);
+  http.setTimeout(30000);
 
   if (!http.begin(client, url)) {
+    otaProgress.failed = true;
+    otaProgress.inProgress = false;
+    otaProgress.message = "HTTP begin failed";
     Serial.println("[Cloud-OTA] HTTP begin failed.");
     return false;
   }
@@ -487,6 +510,9 @@ bool performCloudOta(const String &url) {
   http.setUserAgent("NHL-GoalLight-OTA/" FIRMWARE_VERSION);
   int httpCode = http.GET();
   if (httpCode != HTTP_CODE_OK) {
+    otaProgress.failed = true;
+    otaProgress.inProgress = false;
+    otaProgress.message = "HTTP error " + String(httpCode);
     Serial.printf("[Cloud-OTA] HTTP GET returned: %d\n", httpCode);
     http.end();
     return false;
@@ -494,13 +520,21 @@ bool performCloudOta(const String &url) {
 
   int contentLength = http.getSize();
   if (contentLength <= 0) {
+    otaProgress.failed = true;
+    otaProgress.inProgress = false;
+    otaProgress.message = "Invalid binary size";
     Serial.printf("[Cloud-OTA] Invalid binary size: %d\n", contentLength);
     http.end();
     return false;
   }
 
+  otaProgress.totalBytes = contentLength;
+  otaProgress.message = "Flashing partition...";
   Serial.printf("[Cloud-OTA] Binary size: %d bytes. Flashing partition...\n", contentLength);
   if (!Update.begin(contentLength)) {
+    otaProgress.failed = true;
+    otaProgress.inProgress = false;
+    otaProgress.message = "Not enough OTA partition space";
     Serial.println("[Cloud-OTA] Not enough space for OTA.");
     Update.printError(Serial);
     http.end();
@@ -508,8 +542,40 @@ bool performCloudOta(const String &url) {
   }
 
   WiFiClient *stream = http.getStreamPtr();
-  size_t written = Update.writeStream(*stream);
+  uint8_t buff[2048];
+  size_t written = 0;
+  unsigned long lastActivity = millis();
+
+  while (http.connected() && (written < (size_t)contentLength)) {
+    size_t sizeAvailable = stream->available();
+    if (sizeAvailable) {
+      int c = stream->readBytes(buff, ((sizeAvailable > sizeof(buff)) ? sizeof(buff) : sizeAvailable));
+      if (c > 0) {
+        Update.write(buff, c);
+        written += c;
+        otaProgress.bytesWritten = written;
+        otaProgress.percent = (written * 100) / contentLength;
+        lastActivity = millis();
+      }
+    } else {
+      if (millis() - lastActivity > 15000) {
+        otaProgress.failed = true;
+        otaProgress.inProgress = false;
+        otaProgress.message = "Stream timeout after 15s";
+        Serial.println("[Cloud-OTA] Stream timeout.");
+        Update.abort();
+        http.end();
+        return false;
+      }
+      delay(1);
+    }
+    yield();
+  }
+
   if (written != (size_t)contentLength) {
+    otaProgress.failed = true;
+    otaProgress.inProgress = false;
+    otaProgress.message = "Download size mismatch";
     Serial.printf("[Cloud-OTA] Stream write mismatch: %u / %d\n", (unsigned int)written, contentLength);
     Update.printError(Serial);
     http.end();
@@ -517,23 +583,38 @@ bool performCloudOta(const String &url) {
   }
 
   if (!Update.end(true)) {
+    otaProgress.failed = true;
+    otaProgress.inProgress = false;
+    otaProgress.message = "Update verification failed";
     Serial.println("[Cloud-OTA] Update.end() failed.");
     Update.printError(Serial);
     http.end();
     return false;
   }
 
-  Serial.println("[Cloud-OTA] Flash successful! Rebooting...");
+  otaProgress.percent = 100;
+  otaProgress.success = true;
+  otaProgress.inProgress = false;
+  otaProgress.message = "Flash complete! Rebooting...";
+  Serial.println("[Cloud-OTA] Flash successful! Rebooting in 1.5s...");
   http.end();
-  delay(500);
+  delay(1500);
   ESP.restart();
   return true;
 }
 
+void cloudOtaTask(void *pv) {
+  performCloudOta(cloudOtaTargetUrl);
+  vTaskDelete(NULL);
+}
+
 void setupWebServer() {
 
-  // Main page
+  // Main page - Disable caching so browsers never serve stale HTML or version strings
   server.on("/", []() {
+    server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    server.sendHeader("Pragma", "no-cache");
+    server.sendHeader("Expires", "0");
     server.send_P(200, "text/html", INDEX_HTML);
   });
 
@@ -952,16 +1033,24 @@ void setupWebServer() {
     server.send(200, "application/json", json);
   });
 
-  // REST API: OTA Firmware Update
+  // REST API: Manual OTA Firmware Upload
   server.on("/api/update", HTTP_POST, []() {
     server.sendHeader("Connection", "close");
-    server.send(200, "application/json", Update.hasError() ? "{\"success\":false,\"error\":\"Update failed\"}" : "{\"success\":true}");
-    delay(500);
+    if (Update.hasError()) {
+      server.send(500, "application/json", "{\"success\":false,\"error\":\"OTA flashing failed. Ensure you selected firmware.bin, not merged.bin.\"}");
+      return;
+    }
+    server.send(200, "application/json", "{\"success\":true}");
+    delay(1000);
     ESP.restart();
   }, []() {
     HTTPUpload& upload = server.upload();
     if (upload.status == UPLOAD_FILE_START) {
-      Serial.printf("[OTA] Update started: %s\n", upload.filename.c_str());
+      Serial.printf("[OTA] Manual upload started: %s\n", upload.filename.c_str());
+      if (upload.filename.indexOf("merged") >= 0) {
+        Serial.println("[OTA] Error: User selected merged.bin! Aborting OTA.");
+        return;
+      }
       if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
         Update.printError(Serial);
       }
@@ -971,30 +1060,55 @@ void setupWebServer() {
       }
     } else if (upload.status == UPLOAD_FILE_END) {
       if (Update.end(true)) {
-        Serial.printf("[OTA] Update Success: %u bytes\n", upload.totalSize);
+        Serial.printf("[OTA] Manual upload success: %u bytes\n", upload.totalSize);
       } else {
         Update.printError(Serial);
       }
     }
   });
 
-  // REST API: Cloud 1-Click OTA Update
+  // REST API: Cloud 1-Click OTA Initiator (Background Task)
   server.on("/api/ota-cloud", HTTP_POST, []() {
     String url = "https://revelrob.github.io/NHLGoalLight/builds/firmware.bin";
     if (server.hasArg("plain")) {
       String body = server.arg("plain");
-      int uPos = body.indexOf("\"url\":\"");
+      int uPos = body.indexOf("\"url\"");
       if (uPos >= 0) {
-        String u = body.substring(uPos + 7, body.indexOf("\"", uPos + 7));
-        u.trim();
-        if (u.length() > 0) url = u;
+        int httpPos = body.indexOf("http", uPos);
+        int quoteEnd = body.indexOf("\"", httpPos);
+        if (httpPos >= 0 && quoteEnd > httpPos) {
+          url = body.substring(httpPos, quoteEnd);
+        }
       }
     }
 
-    server.send(200, "application/json", "{\"success\":true,\"message\":\"Cloud OTA started\"}");
-    delay(200);
+    cloudOtaTargetUrl = url;
+    otaProgress.inProgress = true;
+    otaProgress.percent = 0;
+    otaProgress.bytesWritten = 0;
+    otaProgress.totalBytes = 0;
+    otaProgress.success = false;
+    otaProgress.failed = false;
+    otaProgress.message = "Initiating cloud OTA...";
 
-    performCloudOta(url);
+    server.send(200, "application/json", "{\"success\":true,\"message\":\"Cloud OTA started\"}");
+
+    // Spawn on Core 1 so WebServer stays alive and can report progress
+    xTaskCreatePinnedToCore(cloudOtaTask, "CloudOtaTask", 8192, NULL, 1, NULL, 1);
+  });
+
+  // REST API: Real-Time OTA Progress Status
+  server.on("/api/ota-status", HTTP_GET, []() {
+    String json = "{";
+    json += "\"inProgress\":" + String(otaProgress.inProgress ? "true" : "false") + ",";
+    json += "\"percent\":" + String(otaProgress.percent) + ",";
+    json += "\"bytesWritten\":" + String(otaProgress.bytesWritten) + ",";
+    json += "\"totalBytes\":" + String(otaProgress.totalBytes) + ",";
+    json += "\"success\":" + String(otaProgress.success ? "true" : "false") + ",";
+    json += "\"failed\":" + String(otaProgress.failed ? "true" : "false") + ",";
+    json += "\"message\":\"" + otaProgress.message + "\"";
+    json += "}";
+    server.send(200, "application/json", json);
   });
 
   // Captive portal fallback

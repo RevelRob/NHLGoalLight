@@ -1250,7 +1250,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       <div class="card">
         <h2>🔄 Firmware & Updates</h2>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <span style="font-size:0.85rem; color:var(--text-muted)">Current Version: <strong id="curVer" style="color:var(--text)">v1.1.0.3</strong></span>
+          <span style="font-size:0.85rem; color:var(--text-muted)">Current Version: <strong id="curVer" style="color:var(--text)">v1.1.0.4</strong></span>
           <button type="button" id="btnCheckUpdate" style="padding:6px 12px; font-size:0.8rem; background:var(--btn-bg); border:1px solid var(--border); color:var(--text); border-radius:8px; cursor:pointer;">🔍 Check GitHub</button>
         </div>
         <label class="checkbox-row" style="margin-bottom:12px;">
@@ -2449,28 +2449,56 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
                 if (!confirm(`Install ${latestTag} directly on the Goal Light? It will reboot after installation.`)) return;
                 btn1Click.disabled = true;
                 updateInfo.innerHTML = `<strong>⚡ Installing ${latestTag} directly from Cloud...</strong><br>` +
-                  `<span style="font-size:0.82rem; color:var(--text-muted);">Downloading and writing to flash memory. Please wait about 15 seconds...</span><br><br>` +
-                  `<div style="background:var(--border); border-radius:6px; height:10px; overflow:hidden;"><div id="cloudBar" style="background:var(--accent); height:100%; width:0%; transition:width 15s linear;"></div></div>`;
-                setTimeout(() => {
-                  const cb = document.getElementById('cloudBar');
-                  if (cb) cb.style.width = '100%';
-                }, 100);
+                  `<span id="cloudStatusText" style="font-size:0.82rem; color:var(--text-muted);">Connecting to firmware server...</span><br><br>` +
+                  `<div style="background:var(--border); border-radius:6px; height:12px; overflow:hidden;"><div id="cloudBar" style="background:var(--accent); height:100%; width:0%; transition:width 0.3s ease;"></div></div>`;
 
+                // Use direct CDN URL for reliable high speed download without redirects
+                const directUrl = 'https://revelrob.github.io/NHLGoalLight/builds/firmware.bin';
                 fetch('/api/ota-cloud', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ url: assetUrl })
-                }).then(() => {
-                  let count = 16;
-                  const t = setInterval(() => {
-                    count--;
-                    if (count <= 0) {
-                      clearInterval(t);
-                      window.location.reload();
-                    }
-                  }, 1000);
+                  body: JSON.stringify({ url: directUrl })
+                }).then(res => res.json()).then(data => {
+                  if (!data.success) {
+                    throw new Error(data.message || 'Failed to start cloud update');
+                  }
+                  // Start real-time progress polling
+                  const pollInterval = setInterval(() => {
+                    fetch('/api/ota-status')
+                      .then(r => r.json())
+                      .then(st => {
+                        const cb = document.getElementById('cloudBar');
+                        const stText = document.getElementById('cloudStatusText');
+                        if (cb) cb.style.width = st.percent + '%';
+                        if (stText) {
+                          if (st.totalBytes > 0) {
+                            const kbWritten = Math.round(st.bytesWritten / 1024);
+                            const kbTotal = Math.round(st.totalBytes / 1024);
+                            stText.textContent = `${st.message} (${st.percent}%, ${kbWritten} KB / ${kbTotal} KB)`;
+                          } else {
+                            stText.textContent = st.message || 'Updating...';
+                          }
+                        }
+                        if (st.success) {
+                          clearInterval(pollInterval);
+                          if (cb) cb.style.background = 'var(--success)';
+                          if (stText) stText.innerHTML = '<strong>✅ Flash verified! Rebooting Goal Light...</strong>';
+                          setTimeout(() => window.location.reload(), 6000);
+                        } else if (st.failed) {
+                          clearInterval(pollInterval);
+                          if (cb) cb.style.background = '#e63946';
+                          if (stText) stText.innerHTML = `<span style="color:#e63946;">❌ Update failed: ${st.message}</span>`;
+                          btn1Click.disabled = false;
+                        }
+                      })
+                      .catch(() => {
+                        // Device may have rebooted after flash success
+                        setTimeout(() => window.location.reload(), 4000);
+                      });
+                  }, 600);
                 }).catch(err => {
                   alert('Cloud OTA error: ' + err);
+                  btn1Click.disabled = false;
                 });
               };
             }
@@ -2500,6 +2528,10 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     btnOtaUpload.onclick = () => {
       const file = otaFile.files[0];
       if (!file) return;
+      if (file.name.toLowerCase().includes('merged')) {
+        alert('❌ Error: You selected merged.bin (4MB full flash image).\n\nFor over-the-air updates, please select firmware.bin (1.28MB).');
+        return;
+      }
       if (!confirm(`Flash ${file.name}? The goal light will reboot after installation.`)) return;
 
       const formData = new FormData();
@@ -2519,12 +2551,14 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       };
 
       xhr.onload = () => {
-        if (xhr.status === 200) {
-          otaText.textContent = '✅ Update complete! Rebooting device in 10s...';
+        let resp = {};
+        try { resp = JSON.parse(xhr.responseText); } catch(e){}
+        if (xhr.status === 200 && resp.success) {
+          otaText.textContent = '✅ Update complete! Rebooting device in 6s...';
           otaBar.style.background = 'var(--success)';
-          setTimeout(() => window.location.reload(), 10000);
+          setTimeout(() => window.location.reload(), 6000);
         } else {
-          otaText.textContent = '❌ Update failed: ' + xhr.responseText;
+          otaText.textContent = '❌ Update failed: ' + (resp.error || xhr.responseText || 'Flash error');
           otaBar.style.background = '#e63946';
           btnOtaUpload.disabled = false;
         }
