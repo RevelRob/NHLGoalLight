@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NHL Goal Light - Web Flasher</title>
+  <link rel="apple-touch-icon" href="../apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="../icon.png">
+  <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card: #161b22;
+      --border: #30363d;
+      --accent: #e63946;
+      --accent-glow: rgba(230, 57, 70, 0.35);
+      --text: #f0f6fc;
+      --muted: #8b949e;
+      --success: #2ea043;
+      --warning: #d29922;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 24px 16px;
+      text-align: center;
+    }
+    .top-nav {
+      max-width: 520px;
+      width: 100%;
+      text-align: left;
+      margin-bottom: 14px;
+    }
+    .top-nav a {
+      color: #58a6ff;
+      text-decoration: none;
+      font-size: 0.88rem;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .top-nav a:hover { text-decoration: underline; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 36px 28px;
+      max-width: 520px;
+      width: 100%;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.6);
+    }
+    .badge {
+      display: inline-block;
+      font-size: 0.8rem;
+      font-weight: 700;
+      padding: 5px 12px;
+      border-radius: 20px;
+      background: rgba(230, 57, 70, 0.15);
+      color: var(--accent);
+      margin-bottom: 14px;
+      border: 1px solid rgba(230, 57, 70, 0.3);
+      letter-spacing: 0.5px;
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 1.85rem;
+      letter-spacing: -0.5px;
+    }
+    p {
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 0.95rem;
+      margin-bottom: 22px;
+    }
+    .steps {
+      text-align: left;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 22px;
+      font-size: 0.88rem;
+    }
+    .steps ol { margin: 0; padding-left: 20px; }
+    .steps li { margin-bottom: 8px; color: #c9d1d9; }
+    .steps li:last-child { margin-bottom: 0; }
+    .button-container {
+      margin: 18px 0;
+    }
+    button.flash-btn {
+      padding: 15px 32px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 18px var(--accent-glow);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    button.flash-btn:hover {
+      opacity: 0.92;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 22px var(--accent-glow);
+    }
+    .callout {
+      text-align: left;
+      background: rgba(210, 153, 34, 0.1);
+      border: 1px solid rgba(210, 153, 34, 0.3);
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 0.8rem;
+      color: #e3b341;
+      line-height: 1.45;
+      margin-top: 18px;
+    }
+    .callout strong { color: #f0f6fc; }
+    .footer-note {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="top-nav">
+    <a href="../index.html">← Back to Project Guide & Assembly Instructions</a>
+  </div>
+
+  <div class="card">
+    <div class="badge">ESP32-S3 FIRMWARE (v1.1.0.2)</div>
+    <h1>⚡ Web Browser Flasher</h1>
+    <p>Install or update your NHL Goal Light firmware directly from your web browser with one click. No terminal, Python, or drivers required.</p>
+
+    <div class="steps">
+      <ol>
+        <li>Connect your <strong>ESP32-S3 Super Mini</strong> (or compatible ESP32-S3) via USB-C.</li>
+        <li>Ensure you are in <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong>.</li>
+        <li>Click <strong>Install Firmware</strong> below and choose your USB serial port.</li>
+        <li>Once flashed, tap <strong>Next</strong> to enter your home Wi-Fi credentials!</li>
+      </ol>
+    </div>
+
+    <div class="button-container">
+      <esp-web-install-button manifest="../manifest.json">
+        <button slot="activate" class="flash-btn">
+          🚀 Install Firmware
+        </button>
+        <span slot="unsupported">
+          ⚠️ Web Serial is not supported in this browser. Please use Chrome, Edge, or Opera on a desktop computer.
+        </span>
+        <span slot="not-allowed">
+          ⚠️ Web Serial requires an HTTPS connection or localhost.
+        </span>
+      </esp-web-install-button>
+    </div>
+
+    <div class="callout">
+      <strong>⚠️ Hardware Compatibility Note:</strong><br>
+      This build is compiled for the <strong>ESP32-S3</strong> (Xtensa LX7 dual-core with native USB CDC, including the compact ESP32-S3 Super Mini). Traditional ESP32 (LX6) and ESP32-C3 (RISC-V) use different CPU architectures and require distinct binary builds.
+    </div>
+
+    <div class="footer-note">
+      💡 Ensure your USB-C cable supports data transfer (not a charge-only cable).<br>
+      If your board does not appear, hold <strong>BOOT (0)</strong>, click <strong>RST</strong> once, then release <strong>BOOT</strong>.
+    </div>
+  </div>
+</body>
+</html>

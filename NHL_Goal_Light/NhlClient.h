@@ -26,10 +26,28 @@ struct GameStatus {
   String situationCode;
 };
 
+struct UpcomingGame {
+  bool valid;
+  int gameId;
+  String date;         // e.g. "2026-10-19"
+  String timeUTC;      // e.g. "2026-10-19T23:30:00Z"
+  String gameState;    // e.g. "FUT", "PRE", "LIVE", "FINAL"
+  String opponent;     // e.g. "SJS"
+  String opponentName; // e.g. "Sharks"
+  String homeAbbrev;   // e.g. "TOR"
+  String awayAbbrev;   // e.g. "SJS"
+  String homeName;     // e.g. "Maple Leafs"
+  String awayName;     // e.g. "Sharks"
+  String venue;        // e.g. "Scotiabank Arena"
+  String broadcasts;   // e.g. "SN+, TVAS, NBCSCA"
+  bool isHome;         // true if teamAbbrev is home team
+};
+
 class NhlClient {
 private:
   String teamAbbrev;
   GameStatus currentStatus;
+  UpcomingGame upcoming;
   int lastWatchedScore;
   int lastOpponentScore;
   unsigned long lastPollTime;
@@ -37,11 +55,11 @@ private:
   bool initialSnapshot;
 
 public:
-  NhlClient() : teamAbbrev("NYR"),
+  NhlClient() : teamAbbrev("TOR"),
                 lastWatchedScore(-1),
                 lastOpponentScore(-1),
                 lastPollTime(0),
-                pollIntervalMs(30000),
+                pollIntervalMs(5000),
                 initialSnapshot(true) {
     currentStatus.state = STATE_UNKNOWN;
     currentStatus.gameId = 0;
@@ -49,6 +67,7 @@ public:
     currentStatus.awayScore = 0;
     currentStatus.period = 0;
     currentStatus.inIntermission = false;
+    upcoming.valid = false;
   }
 
   void setTeam(const char* abbrev) {
@@ -62,10 +81,12 @@ public:
     initialSnapshot = true;
     currentStatus.state = STATE_UNKNOWN;
     currentStatus.gameId = 0;
+    upcoming.valid = false;
     pollIntervalMs = 5000;
   }
 
   const GameStatus& getStatus() const { return currentStatus; }
+  const UpcomingGame& getUpcoming() const { return upcoming; }
 
   // Returns true if preferred team just scored!
   bool poll(bool &outOpponentGoal, bool &outGameWin, bool &outPeriodStart) {
@@ -125,12 +146,21 @@ private:
     WiFiClientSecure client;
     client.setInsecure();
     HTTPClient http;
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS); // Follow 301/302/307 redirects from NHL CDN
+    http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
     http.begin(client, url);
     http.setUserAgent("NHL-GoalLight/1.0");
     http.setTimeout(10000);
 
     int code = http.GET();
+    if (code == 301 || code == 302 || code == 307 || code == 308) {
+      String redirectUrl = http.getLocation();
+      if (redirectUrl.length() > 0) {
+        http.end();
+        http.begin(client, redirectUrl);
+        code = http.GET();
+      }
+    }
+
     if (code != 200) {
       Serial.printf("[NHL] Schedule HTTP error: %d\n", code);
       http.end();
@@ -141,21 +171,134 @@ private:
     String payload = http.getString();
     http.end();
 
-    // Check if team has games in schedule
-    int teamPos = payload.indexOf("\"abbrev\":\"" + teamAbbrev + "\"");
-    if (teamPos < 0) {
-      Serial.println("[NHL] No games found this week for " + teamAbbrev);
+    parseSchedule(payload);
+  }
+
+  void parseSchedule(const String &payload) {
+    int gamesPos = payload.indexOf("\"games\":[");
+    if (gamesPos < 0) {
+      upcoming.valid = false;
       currentStatus.state = STATE_NO_GAME;
       return;
     }
 
-    // Find nearest game ID
-    int idPos = payload.indexOf("\"id\":");
-    if (idPos > 0) {
-      currentStatus.gameId = extractInt(payload, "\"id\":", 0);
-      Serial.printf("[NHL] Discovered Game ID: %d\n", currentStatus.gameId);
-      currentStatus.state = STATE_FUTURE;
-      pollIntervalMs = 5000; // Switch to quick check
+    int searchPos = gamesPos + 8;
+    bool foundActive = false;
+    UpcomingGame bestUpcoming;
+    bestUpcoming.valid = false;
+
+    while (searchPos < payload.length()) {
+      int gameStart = payload.indexOf("{\"id\":", searchPos);
+      if (gameStart < 0) break;
+      
+      int depth = 0;
+      int gameEnd = -1;
+      for (int i = gameStart; i < payload.length(); i++) {
+        if (payload[i] == '{') depth++;
+        else if (payload[i] == '}') {
+          depth--;
+          if (depth == 0) {
+            gameEnd = i;
+            break;
+          }
+        }
+      }
+      if (gameEnd < 0) break;
+
+      String gObj = payload.substring(gameStart, gameEnd + 1);
+      searchPos = gameEnd + 1;
+
+      int gId = extractInt(gObj, "\"id\":", 0);
+      String gState = extractString(gObj, "\"gameState\":\"", 0);
+      String gDate = extractString(gObj, "\"gameDate\":\"", 0);
+      String gTime = extractString(gObj, "\"startTimeUTC\":\"", 0);
+
+      String homeBlock = extractObject(gObj, "\"homeTeam\":", 0);
+      String awayBlock = extractObject(gObj, "\"awayTeam\":", 0);
+      String hAbbrev = extractString(homeBlock, "\"abbrev\":\"", 0);
+      String aAbbrev = extractString(awayBlock, "\"abbrev\":\"", 0);
+      String hName = extractString(homeBlock, "\"default\":\"", 0);
+      String aName = extractString(awayBlock, "\"default\":\"", 0);
+
+      String venueBlock = extractObject(gObj, "\"venue\":", 0);
+      String venueName = extractString(venueBlock, "\"default\":\"", 0);
+
+      String bcasts = "";
+      int netSearch = 0;
+      while ((netSearch = gObj.indexOf("\"network\":\"", netSearch)) >= 0) {
+        String net = extractString(gObj, "\"network\":\"", netSearch);
+        if (net.length() > 0) {
+          if (bcasts.length() > 0 && bcasts.indexOf(net) < 0) bcasts += ", ";
+          if (bcasts.indexOf(net) < 0) bcasts += net;
+        }
+        netSearch += 11;
+      }
+
+      bool isHome = (hAbbrev == teamAbbrev);
+      String opp = isHome ? aAbbrev : hAbbrev;
+      String oppName = isHome ? aName : hName;
+
+      UpcomingGame gCandidate;
+      gCandidate.valid = true;
+      gCandidate.gameId = gId;
+      gCandidate.date = gDate;
+      gCandidate.timeUTC = gTime;
+      gCandidate.opponent = opp;
+      gCandidate.opponentName = oppName;
+      gCandidate.isHome = isHome;
+      gCandidate.venue = venueName;
+      gCandidate.broadcasts = bcasts;
+      gCandidate.gameState = gState;
+
+      // Active live game?
+      if (gState == "LIVE" || gState == "CRIT") {
+        upcoming = gCandidate;
+        currentStatus.gameId = gId;
+        currentStatus.state = STATE_LIVE;
+        currentStatus.homeAbbrev = hAbbrev;
+        currentStatus.awayAbbrev = aAbbrev;
+        foundActive = true;
+        pollIntervalMs = 4000;
+        Serial.printf("[NHL] LIVE GAME ACTIVE! %s vs %s (ID: %d)\n", aAbbrev.c_str(), hAbbrev.c_str(), gId);
+        break;
+      }
+
+      // Future/Pregame candidate
+      if (gState == "FUT" || gState == "PRE") {
+        if (!bestUpcoming.valid) {
+          bestUpcoming = gCandidate;
+        }
+      } else if (gState == "FINAL" || gState == "OFF") {
+        if (!bestUpcoming.valid) {
+          bestUpcoming = gCandidate;
+        }
+      }
+    }
+
+    if (!foundActive) {
+      if (bestUpcoming.valid) {
+        upcoming = bestUpcoming;
+        currentStatus.gameId = bestUpcoming.gameId;
+        if (bestUpcoming.gameState == "PRE") {
+          currentStatus.state = STATE_PREGAME;
+          pollIntervalMs = 20000;
+        } else if (bestUpcoming.gameState == "FINAL" || bestUpcoming.gameState == "OFF") {
+          currentStatus.state = STATE_FINAL;
+          pollIntervalMs = 60000UL * 30;
+        } else {
+          currentStatus.state = STATE_FUTURE;
+          pollIntervalMs = 60000UL * 10;
+        }
+        Serial.printf("[NHL] Upcoming: %s vs %s on %s at %s (Venue: %s, TV: %s)\n",
+                      bestUpcoming.isHome ? bestUpcoming.opponent.c_str() : teamAbbrev.c_str(),
+                      bestUpcoming.isHome ? teamAbbrev.c_str() : bestUpcoming.opponent.c_str(),
+                      bestUpcoming.date.c_str(), bestUpcoming.timeUTC.c_str(),
+                      bestUpcoming.venue.c_str(), bestUpcoming.broadcasts.c_str());
+      } else {
+        upcoming.valid = false;
+        currentStatus.state = STATE_NO_GAME;
+        pollIntervalMs = 60000UL * 30;
+      }
     }
   }
 

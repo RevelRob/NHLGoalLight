@@ -10,6 +10,7 @@ enum LedMode {
   LED_IDLE_BREATHE,
   LED_IDLE_SOLID,
   LED_IDLE_CANDLE,
+  LED_IDLE_ORBIT,
   LED_BEACON_GOAL,
   LED_STROBE_GOAL,
   LED_BREATHE_CELEBRATE,
@@ -77,6 +78,8 @@ public:
     if (!lightsEnabled) {
       strip.clear();
       strip.show();
+    } else if (!isCelebrating() && currentMode != LED_AP_CONFIG) {
+      returnToIdle();
     }
   }
 
@@ -116,6 +119,7 @@ public:
       case 1: setMode(LED_IDLE_BREATHE); break;
       case 2: setMode(LED_IDLE_SOLID); break;
       case 3: setMode(LED_IDLE_CANDLE); break;
+      case 4: setMode(LED_IDLE_ORBIT); break;
       default: setMode(LED_IDLE_BREATHE); break;
     }
   }
@@ -183,6 +187,10 @@ public:
 
       case LED_IDLE_CANDLE:
         renderCandleFlicker(now);
+        break;
+
+      case LED_IDLE_ORBIT:
+        renderOrbit(now);
         break;
 
       case LED_VICTORY_RAINBOW:
@@ -377,15 +385,23 @@ private:
     animStep++;
   }
 
+  // AP Setup Mode: Subtle gentle breathing on first pixel (pixel 0) in warm amber/orange
   void renderApBeacon(unsigned long now) {
-    if (now - lastFrameTime < 90) return;
+    if (now - lastFrameTime < 30) return;
     lastFrameTime = now;
 
     strip.clear();
-    int idx = mapLedIndex(animStep % numLeds);
-    strip.setPixelColor(idx, strip.Color(255, 140, 0)); // Amber setup beacon
+    // Smooth, slow breathing cycle (~2.5s)
+    float val = (exp(sin(now / 2500.0 * PI)) - 0.36787944) * 108.0;
+    uint8_t factor = (uint8_t)constrain(val, 6.0, 180.0);
+
+    // Warm amber / orange (RGB 255, 120, 0)
+    uint8_t r = (255 * factor) / 255;
+    uint8_t g = (120 * factor) / 255;
+    uint8_t b = 0;
+
+    strip.setPixelColor(0, strip.Color(r, g, b));
     strip.show();
-    animStep++;
   }
 
   // Idle: Subtle gentle team breathe
@@ -418,17 +434,36 @@ private:
 
   // Idle: Candle / Ember flicker
   void renderCandleFlicker(unsigned long now) {
-    if (now - lastFrameTime < 80) return;
+    if (now - lastFrameTime < 70) return;
     lastFrameTime = now;
 
     for (int i = 0; i < numLeds; i++) {
-      uint8_t flicker = random(160, 255);
+      uint8_t flicker = random(30, 230);
       uint8_t r = (activeTeam->primaryR * flicker) / 255;
       uint8_t g = (activeTeam->primaryG * flicker) / 255;
       uint8_t b = (activeTeam->primaryB * flicker) / 255;
       strip.setPixelColor(i, strip.Color(r, g, b));
     }
     strip.show();
+  }
+
+  // Idle: Slow gentle orbit
+  void renderOrbit(unsigned long now) {
+    if (now - lastFrameTime < 160) return;
+    lastFrameTime = now;
+
+    strip.clear();
+    int head = animStep % numLeds;
+    for (int offset = -1; offset <= 1; offset++) {
+      int idx = mapLedIndex(head + offset);
+      float factor = (offset == 0) ? 0.75f : 0.2f;
+      uint8_t r = (uint8_t)(activeTeam->primaryR * factor);
+      uint8_t g = (uint8_t)(activeTeam->primaryG * factor);
+      uint8_t b = (uint8_t)(activeTeam->primaryB * factor);
+      strip.setPixelColor(idx, strip.Color(r, g, b));
+    }
+    strip.show();
+    animStep = (animStep + 1) % numLeds;
   }
 
   void renderRainbow(unsigned long now) {

@@ -142,6 +142,40 @@ graph TD
    - Satellites discover the Master's operating Wi-Fi channel automatically.
    - Pairing can be completed with a 1-tap button in the web portal or via physical button press sequence.
 4. **Independent Satellite Profiles**:
-   - Assign per-device audio/lighting roles: e.g. Living Room plays full goal horn + beacon, while a bedroom or upstairs satellite runs silent team colour breathing without waking sleeping children.
-   - Master web portal provides a multi-device management view showing satellite RSSI signal strength, online status, and multi-light test trigger.
+---
+
+## 📍 Phase 5: Native Companion Apps (iOS & Android Roadmap) 📱
+
+While the installable Progressive Web App (PWA) provides zero-install native-like controls today, dedicated native iOS and Android applications are planned on the long-term roadmap to unlock mobile-specific platform capabilities:
+
+1. **Bluetooth Low Energy (BLE) & mDNS Auto-Discovery**:
+   - Instant discovery of nearby Goal Lights on the local network or via BLE without entering IP addresses.
+   - 1-tap onboarding wizard to connect new goal lights to home Wi-Fi directly from Bluetooth.
+2. **Live Activities & Dynamic Island Integration (iOS)**:
+   - Real-time score clock and penalty timers displayed on the iPhone Lock Screen and Dynamic Island during live games.
+3. **Interactive Home Screen Widgets**:
+   - Quick at-a-glance scoreboard widgets (Next Game, Live Score, Period Clock).
+   - Interactive widget buttons to trigger physical light celebrations or mute volume directly from the home screen.
+4. **Local Network Background Push Alerts**:
+   - Background audio and haptic feedback when your team scores, even when your phone screen is turned off.
+
+---
+
+## 🌐 Community Charter, Open Source Philosophy & MakerWorld 3D Models
+
+### 1. 100% Free & Open Source (MIT Licensed)
+This project is built by a passionate hockey fan for hockey fans everywhere. All source code, schematics, board configurations, and documentation are provided completely free under the permissive MIT Open Source License. There are no subscriptions, no locked tiers, and no advertisements.
+
+### 2. MakerWorld 3D Printable Enclosure Models
+Custom 3D printable files are being designed and hosted for free community download (via MakerWorld / Printables):
+- Base enclosure with mount points for ESP32-S3 Super Mini, DFPlayer Mini, and 3W speaker.
+- Diffuser ring for 16-LED NeoPixel ring.
+- Translucent halogen-style red beacon dome lens.
+- Snap-fit assembly with optional heat-set threaded inserts.
+
+### 3. Voluntary Community Support & Donations
+Because this project is maintained as a labour of love in spare time without corporate backing, keeping it completely open source allows the community to contribute bug fixes, suggest new features, and build their own hardware variations freely. For community members who wish to support ongoing development, voluntary donation links (Ko-fi / GitHub Sponsors) are available to help fund prototype components, test hardware, and coffee.
+
+### 4. Proudly Vibe Coded & Transparent
+In alignment with modern software development practices, this project is proudly **vibe coded** — designed and implemented collaboratively with state-of-the-art AI coding assistants alongside rigorous human physical hardware testing and validation. The entire codebase is completely public, thoroughly commented, and open for community peer review, security auditing, and collaborative pull requests.
 

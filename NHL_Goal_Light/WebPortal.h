@@ -27,7 +27,8 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
   <meta name="theme-color" content="#0d1117">
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/png" sizes="192x192" href="/icon.png">
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%23111' stroke='%23333' stroke-width='4'/%3E%3Ccircle cx='50' cy='50' r='38' fill='%23d90429'/%3E%3Cpath d='M25 50h50M50 25v50' stroke='%23fff' stroke-width='8' stroke-linecap='round'/%3E%3Ccircle cx='50' cy='50' r='18' fill='%23fff'/%3E%3Ccircle cx='50' cy='50' r='10' fill='%23d90429'/%3E%3C/svg%3E">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icon.png">
+  <link rel="shortcut icon" href="/icon.png">
 
   <style>
     :root {
@@ -134,7 +135,6 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       border: 1px solid rgba(255,255,255,0.08);
     }
 
-    /* Tab Page Container */
     .tab-page {
       display: none;
       flex-direction: column;
@@ -142,6 +142,10 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     }
     .tab-page.active {
       display: flex;
+    }
+    /* Touch ghost-click shield to prevent touchscreen pass-through during tab transitions */
+    .tab-page.just-activated * {
+      pointer-events: none !important;
     }
 
     /* Cards */
@@ -336,7 +340,33 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     }
     .preset-btn:hover { background: var(--btn-hover); }
 
-    /* Virtual LED Ring Preview */
+    /* View Toggle Segmented Buttons */
+    .view-toggle {
+      display: inline-flex;
+      background: var(--card-inner);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 2px;
+      gap: 2px;
+    }
+    .view-toggle-btn {
+      padding: 3px 8px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .view-toggle-btn.active {
+      background: var(--btn-hover);
+      color: var(--text);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    }
+
+    /* Virtual LED Preview */
     .ring-preview-container {
       display: flex;
       flex-direction: column;
@@ -349,7 +379,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       margin-top: 10px;
     }
     #ringCanvas {
-      width: 160px;
+      width: 220px;
       height: 160px;
     }
 
@@ -446,7 +476,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     <div id="tab-live" class="tab-page active">
       
       <!-- Live Game Matchup Card -->
-      <div class="card">
+      <div class="card" id="cardLiveGame">
         <h2>🏒 Game Status</h2>
         <div class="score-card">
           <div class="team-box">
@@ -454,7 +484,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             <span class="team-score" id="liveAwayScore">-</span>
           </div>
           <div class="score-vs">
-            <span id="liveGameClock" class="game-period-pill">No Game</span>
+            <span id="liveGameClock" class="game-period-pill">No Live Game</span>
             <span id="liveIntermissionNote" style="font-size:0.7rem; color:var(--accent); font-weight:700; display:none;">INTERMISSION</span>
           </div>
           <div class="team-box">
@@ -463,6 +493,75 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
           </div>
         </div>
         <div class="helper-text" id="liveStatusSubtext" style="text-align:center;">Synchronised with NHL live scores.</div>
+      </div>
+
+      <!-- Upcoming Game Card (Simple & Detailed Views) -->
+      <div class="card" id="cardUpcomingGame">
+        <h2>
+          <span>📅 Upcoming Game</span>
+          <div class="view-toggle">
+            <button type="button" class="view-toggle-btn active" id="btnViewSimple" onclick="setUpcomingView('simple')">Simple</button>
+            <button type="button" class="view-toggle-btn" id="btnViewDetailed" onclick="setUpcomingView('detailed')">Detailed</button>
+          </div>
+        </h2>
+
+        <!-- Simple View -->
+        <div id="upcomingSimpleView">
+          <div class="score-card" style="padding:14px 10px; margin-bottom:8px;">
+            <div class="team-box">
+              <span class="team-abbrev" id="upSimpleAway">---</span>
+              <span style="font-size:0.72rem; color:var(--text-muted);" id="upSimpleAwayLabel">Away</span>
+            </div>
+            <div class="score-vs">
+              <span style="font-size:0.75rem; font-weight:800; color:var(--accent);" id="upSimpleMatchupPill">VS</span>
+              <span style="font-size:0.88rem; font-weight:800; color:var(--text); margin-top:2px;" id="upSimpleTime">--:--</span>
+              <span style="font-size:0.72rem; color:var(--text-muted);" id="upSimpleDate">Checking Schedule...</span>
+            </div>
+            <div class="team-box">
+              <span class="team-abbrev" id="upSimpleHome">---</span>
+              <span style="font-size:0.72rem; color:var(--text-muted);" id="upSimpleHomeLabel">Home</span>
+            </div>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.78rem; color:var(--text-muted);">
+            <span id="upSimpleVenue">📍 Venue loading...</span>
+            <span id="upSimpleBroadcasts" style="color:#58a6ff; font-weight:600;">📺 Broadcasts pending</span>
+          </div>
+        </div>
+
+        <!-- Detailed View -->
+        <div id="upcomingDetailedView" style="display:none;">
+          <div style="background:#11141a; border-radius:12px; border:1px solid var(--border); padding:14px; margin-bottom:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <span id="upDetMatchupTitle" style="font-size:1.05rem; font-weight:800; color:var(--text);">--- vs ---</span>
+              <span id="upDetHomeAwayBadge" style="font-size:0.72rem; font-weight:700; padding:3px 8px; border-radius:6px; background:rgba(230,57,70,0.15); color:var(--accent); border:1px solid rgba(230,57,70,0.3);">Home Game</span>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:0.8rem;">
+              <div>
+                <div style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase;">📅 Puck Drop Date</div>
+                <div id="upDetDate" style="font-weight:700; color:var(--text); margin-top:2px;">--</div>
+              </div>
+              <div>
+                <div style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase;">⏰ Local Start Time</div>
+                <div id="upDetTime" style="font-weight:700; color:var(--text); margin-top:2px;">--</div>
+              </div>
+              <div style="grid-column: span 2;">
+                <div style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase;">🏟️ Arena & Location</div>
+                <div id="upDetVenue" style="font-weight:600; color:var(--text); margin-top:2px;">--</div>
+              </div>
+              <div style="grid-column: span 2;">
+                <div style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase;">📺 Television Broadcasts</div>
+                <div id="upDetBroadcasts" style="font-weight:600; color:#58a6ff; margin-top:2px;">--</div>
+              </div>
+              <div style="grid-column: span 2;">
+                <div style="color:var(--text-muted); font-size:0.72rem; text-transform:uppercase;">📻 Radio & Audio Coverage</div>
+                <div id="upDetRadio" style="font-weight:600; color:var(--gold); margin-top:2px;">NHL GameCenter Live Audio</div>
+              </div>
+            </div>
+          </div>
+          <div style="text-align:center;">
+            <a id="upDetNhlLink" href="https://www.nhl.com" target="_blank" style="font-size:0.76rem; color:#58a6ff; text-decoration:none;">View Matchup Preview on NHL.com →</a>
+          </div>
+        </div>
       </div>
 
       <!-- Favourite Team Selector -->
@@ -475,7 +574,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         </div>
       </div>
 
-      <!-- Quick Controls -->
+      <!-- Quick Levels (Live Updating without Save) -->
       <div class="card">
         <h2>🎛️ Quick Levels</h2>
         
@@ -495,14 +594,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
           </div>
         </div>
 
-        <!-- Quick Celebration Tests -->
-        <div class="btn-row" style="margin-top:14px;">
-          <button type="button" id="btnTestCelebration" class="primary">🚨 Test Goal Celebration</button>
-        </div>
-        <div class="btn-row" style="margin-top:8px;">
-          <button type="button" id="btnTestLightsOnly" data-hw="lights">💡 Lights Only</button>
-          <button type="button" id="btnTestHornOnly" data-hw="speaker">🔊 Horn Only</button>
-        </div>
+        <div class="helper-text" style="margin-top:10px;">⚡ Levels update immediately. Adjusting volume plays an instant acoustic sound chirp.</div>
       </div>
     </div>
 
@@ -563,10 +655,16 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 
         <!-- Virtual LED Ring Live Preview -->
         <div class="form-group">
-          <label>Live Ring Visualiser Preview</label>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <label style="margin:0;">Live LED Visualiser Preview</label>
+            <div class="view-toggle">
+              <button type="button" class="view-toggle-btn active" id="btnPrevCeleb" onclick="setVisualiserMode('celebration')">🚨 Celebration</button>
+              <button type="button" class="view-toggle-btn" id="btnPrevIdle" onclick="setVisualiserMode('idle')">🌙 Idle Mode</button>
+            </div>
+          </div>
           <div class="ring-preview-container">
-            <canvas id="ringCanvas" width="160" height="160"></canvas>
-            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;">Live animation in team colour</div>
+            <canvas id="ringCanvas" width="220" height="160"></canvas>
+            <div id="previewCaption" style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;">Live animation in team colour</div>
           </div>
         </div>
       </div>
@@ -581,6 +679,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             <option value="1">🌬️ Team Colour Breathe (Subtle Ambient Glow)</option>
             <option value="2">💡 Solid Team Colour Accent</option>
             <option value="3">🔥 Candle / Ember Flicker</option>
+            <option value="4">💫 Orbit Sweep (Gentle Comet)</option>
           </select>
           <div class="helper-text">Lighting style when no game event is actively firing.</div>
         </div>
@@ -588,12 +687,66 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     </div>
 
     <!-- ===================================================== -->
-    <!-- TAB 3: EVENTS (GAME EVENT ACTION MATRIX)              -->
+    <!-- TAB 3: EVENTS (GAME EVENT ACTION MATRIX & SIMULATOR)  -->
     <!-- ===================================================== -->
     <div id="tab-events" class="tab-page">
+      
+      <!-- Event Simulator Studio -->
+      <div class="card">
+        <h2>🧪 Event Simulator Studio</h2>
+        <div class="helper-text" style="margin-bottom:14px;">Test any game event or goal celebration in real time with custom output selection.</div>
+
+        <div class="form-group">
+          <label for="simEventSelect">Simulated Game Event</label>
+          <select id="simEventSelect">
+            <option value="goal">🚨 Favourite Team Goal</option>
+            <option value="opponent">🥅 Opponent Goal Alert</option>
+            <option value="powerplay">⚡ Power Play Awarded</option>
+            <option value="buzzer">🚨 Period End & Start Buzzer</option>
+            <option value="intermission">☕ Relaxed Intermission Glow</option>
+            <option value="win">🏆 Game Victory Fanfare</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="simEffectGroup">
+          <label for="simEffectSelect">Celebration Light Effect Override</label>
+          <select id="simEffectSelect">
+            <option value="0">🚨 Rotating Halogen Beacon</option>
+            <option value="1">⚡ High-Speed Arena Strobe</option>
+            <option value="2">🌊 Team Colour Breathe</option>
+            <option value="3">🚔 Dual Siren Flasher</option>
+            <option value="4">❤️ Heartbeat Pulse</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label style="margin-bottom:8px;">Target Hardware Outputs</label>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <label class="checkbox-row" style="flex:1; min-width:110px; margin:0;" data-hw="lights">
+              <input type="checkbox" id="chkSimLights" checked>
+              <div class="chk-text"><span class="chk-title">💡 Lights</span></div>
+            </label>
+            <label class="checkbox-row" style="flex:1; min-width:110px; margin:0;" data-hw="speaker">
+              <input type="checkbox" id="chkSimHorn" checked>
+              <div class="chk-text"><span class="chk-title">🔊 Sound</span></div>
+            </label>
+            <label class="checkbox-row" style="flex:1; min-width:110px; margin:0;" data-hw="display">
+              <input type="checkbox" id="chkSimDisplay" checked>
+              <div class="chk-text"><span class="chk-title">📺 Display</span></div>
+            </label>
+          </div>
+        </div>
+
+        <div class="btn-row" style="margin-top:14px;">
+          <button type="button" id="btnRunSimTest" class="primary">▶️ Trigger Event Test</button>
+          <button type="button" id="btnStopSimTest" style="background:rgba(230,57,70,0.15); border-color:var(--accent); color:#fff; flex:0.7;">⏹️ Stop / Idle</button>
+        </div>
+      </div>
+
+      <!-- Event Trigger Matrix -->
       <div class="card">
         <h2>⚡ Event Trigger Matrix</h2>
-        <div class="helper-text" style="margin-bottom:14px;">Select which game milestones trigger goal light alerts, sounds, and lighting effects.</div>
+        <div class="helper-text" style="margin-bottom:14px;">Select which game milestones trigger goal light alerts, sounds, and lighting effects during live games.</div>
 
         <label class="checkbox-row">
           <input type="checkbox" id="chkEventGoal" checked disabled>
@@ -781,9 +934,16 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       <div class="card">
         <h2>🔄 Firmware & Updates</h2>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <span style="font-size:0.85rem; color:var(--text-muted)">Current Version: <strong id="curVer" style="color:var(--text)">v1.1.0.1</strong></span>
+          <span style="font-size:0.85rem; color:var(--text-muted)">Current Version: <strong id="curVer" style="color:var(--text)">v1.1.0.2</strong></span>
           <button type="button" id="btnCheckUpdate" style="padding:6px 12px; font-size:0.8rem; background:var(--btn-bg); border:1px solid var(--border); color:var(--text); border-radius:8px; cursor:pointer;">🔍 Check GitHub</button>
         </div>
+        <label class="checkbox-row" style="margin-bottom:12px;">
+          <input type="checkbox" id="chkIncludeBeta">
+          <div class="chk-text">
+            <span class="chk-title" style="font-size:0.8rem;">Include Beta / Pre-release Channels</span>
+            <span class="chk-desc" style="font-size:0.72rem;">Check for early preview builds and developer test versions.</span>
+          </div>
+        </label>
         <div id="updateInfo" style="display:none; padding:10px; border-radius:8px; background:rgba(46,160,67,0.15); border:1px solid var(--success); margin-bottom:12px; font-size:0.82rem; line-height:1.4;"></div>
         
         <div class="form-group" style="margin-bottom:8px;">
@@ -799,7 +959,50 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         </div>
       </div>
 
-      <!-- System Diagnostics & Maintenance -->
+      <!-- Smart Home & Home Assistant Integration (Card 4) -->
+      <div class="card">
+        <h2>🏡 Home Assistant Integration</h2>
+        <div class="helper-text" style="margin-bottom:12px;">Integrate your NHL Goal Light with Home Assistant via MQTT Discovery or direct REST entity control.</div>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="chkHaEnabled">
+          <div class="chk-text">
+            <span class="chk-title">Enable Home Assistant Discovery</span>
+            <span class="chk-desc">Broadcasts MQTT auto-discovery (light entities, live game score sensor, and goal horn trigger).</span>
+          </div>
+        </label>
+
+        <div id="haSettingsGroup" style="display:none; margin-top:12px;">
+          <div class="form-group">
+            <label for="haBroker">MQTT Broker Host / IP</label>
+            <input type="text" id="haBroker" placeholder="homeassistant.local or 192.168.1.100" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label for="haUser">MQTT Username (Optional)</label>
+            <input type="text" id="haUser" placeholder="homeassistant" autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label for="haPass">MQTT Password (Optional)</label>
+            <input type="password" id="haPass" placeholder="Broker password" autocomplete="new-password">
+          </div>
+        </div>
+      </div>
+
+      <!-- Open Source & Community Transparency (Card 5) -->
+      <div class="card" style="border-color:rgba(255,255,255,0.12); background:rgba(255,255,255,0.02);">
+        <h2>✨ Open Source & Community</h2>
+        <div style="font-size:0.82rem; color:var(--text-muted); line-height:1.5; margin-bottom:12px;">
+          🏒 <strong>100% Free & Open Source</strong>: Built for hockey fans everywhere. 3D printable models, schematics, and code are freely available for non-commercial personal use.<br><br>
+          🤖 <strong>Proudly Vibe Coded</strong>: This firmware and web portal are built with modern AI-assisted pair programming ("vibe coding"). All source code is completely public for community review, audits, and collaborative pull requests.<br><br>
+          ☕ <strong>Support Development</strong>: Enjoying your goal light? Voluntary donations help support ongoing maintenance and new features.
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <a href="https://github.com/RevelRob/NHLGoalLight" target="_blank" style="padding:6px 12px; background:var(--btn-bg); border:1px solid var(--border); color:var(--text); border-radius:8px; text-decoration:none; font-size:0.8rem; font-weight:600;">⭐ Star on GitHub</a>
+          <a href="https://revelrob.github.io/NHLGoalLight/" target="_blank" style="padding:6px 12px; background:var(--btn-bg); border:1px solid var(--border); color:var(--text); border-radius:8px; text-decoration:none; font-size:0.8rem; font-weight:600;">📖 Project Guide</a>
+        </div>
+      </div>
+
+      <!-- System Diagnostics & Maintenance (Card 6) -->
       <div class="card">
         <h2>🛠️ Diagnostics & Maintenance</h2>
         <div style="font-size:0.82rem; color:var(--text-muted); display:flex; flex-direction:column; gap:6px; margin-bottom:12px;">
@@ -865,6 +1068,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     // Tab Navigation Switcher
     const navTabs = document.querySelectorAll('.nav-tab');
     const tabPages = document.querySelectorAll('.tab-page');
+    let userNavigated = false;
 
     function switchTab(targetTab) {
       if (document.activeElement && typeof document.activeElement.blur === 'function') {
@@ -880,8 +1084,12 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       tabPages.forEach(p => {
         if (p.id === 'tab-' + targetTab) {
           p.classList.add('active');
+          // Shield tab from touchscreen synthetic click bleed-through
+          p.classList.add('just-activated');
+          setTimeout(() => p.classList.remove('just-activated'), 300);
         } else {
           p.classList.remove('active');
+          p.classList.remove('just-activated');
         }
       });
     }
@@ -889,15 +1097,33 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     navTabs.forEach(tab => {
       tab.addEventListener('click', (e) => {
         e.preventDefault();
+        userNavigated = true;
         const targetTab = tab.getAttribute('data-tab');
         switchTab(targetTab);
       });
     });
 
-    // If loaded in AP Setup Mode (192.168.4.1), default immediately to Settings/System tab
-    if (window.location.hostname === '192.168.4.1') {
+    // Detect if loaded in AP Setup Mode or inside Captive Network Assistant (CNA) browser
+    const currentHost = window.location.hostname.toLowerCase();
+    const isLikelyCaptivePortal = (
+      currentHost === '192.168.4.1' ||
+      currentHost.includes('apple') ||
+      currentHost.includes('captive') ||
+      currentHost.includes('gstatic') ||
+      currentHost.includes('google') ||
+      currentHost.includes('msftconnecttest') ||
+      currentHost.includes('hotspot')
+    );
+
+    if (isLikelyCaptivePortal) {
       switchTab('system');
     }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
+      }
+    });
 
     // Dynamic Hardware Enablement Engine
     const chkHwLights = document.getElementById('chkHwLights');
@@ -928,10 +1154,24 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     const brightSlider = document.getElementById('brightSlider');
     const brightVal = document.getElementById('brightVal');
     brightSlider.oninput = () => brightVal.textContent = Math.round((brightSlider.value / 255) * 100) + '%';
+    brightSlider.onchange = () => {
+      fetch('/api/quick-set', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ brightness: parseInt(brightSlider.value) })
+      }).catch(console.error);
+    };
 
     const volSlider = document.getElementById('volSlider');
     const volVal = document.getElementById('volVal');
     volSlider.oninput = () => volVal.textContent = volSlider.value == 0 ? 'Mute' : 'Level ' + volSlider.value;
+    volSlider.onchange = () => {
+      fetch('/api/quick-set', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ volume: parseInt(volSlider.value), chirp: true })
+      }).catch(console.error);
+    };
 
     const hornSlider = document.getElementById('hornSlider');
     const hornVal = document.getElementById('hornVal');
@@ -957,10 +1197,19 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       delaySlider.oninput();
     };
 
-    // Virtual LED Ring Preview Renderer
+    // Virtual LED Preview Renderer (Responsive to Geometry & Celebration/Idle Modes)
     const ringCanvas = document.getElementById('ringCanvas');
     const ringCtx = ringCanvas.getContext('2d');
     let previewStep = 0;
+    let visualiserMode = 'celebration'; // 'celebration' or 'idle'
+
+    window.setVisualiserMode = function(mode) {
+      visualiserMode = mode;
+      const btnC = document.getElementById('btnPrevCeleb');
+      const btnI = document.getElementById('btnPrevIdle');
+      if (btnC) btnC.classList.toggle('active', mode === 'celebration');
+      if (btnI) btnI.classList.toggle('active', mode === 'idle');
+    };
 
     function getTeamColourHex(abbrev) {
       const t = TEAMS.find(item => item[0] === abbrev);
@@ -968,8 +1217,10 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     }
 
     function renderVirtualRing() {
-      const nPixels = parseInt(document.getElementById('ledPixels').value) || 16;
+      const nPixels = Math.max(4, parseInt(document.getElementById('ledPixels').value) || 16);
+      const layout = parseInt(document.getElementById('ledLayout').value) || 0;
       const effect = parseInt(document.getElementById('effectSelect').value) || 0;
+      const idleEff = parseInt(document.getElementById('idleEffect').value) || 0;
       const teamHex = getTeamColourHex(teamSelect.value);
       const isReverse = document.getElementById('chkLedReverse').checked;
 
@@ -979,43 +1230,102 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 
       const cx = w / 2;
       const cy = h / 2;
-      const radius = 62;
-      const ledRadius = Math.max(3, Math.min(8, 90 / nPixels));
+      const ledRadius = Math.max(3, Math.min(8, Math.floor(130 / nPixels) + 2));
 
       for (let i = 0; i < nPixels; i++) {
         const mappedIdx = isReverse ? ((nPixels - 1) - i) : i;
-        const angle = (mappedIdx / nPixels) * (2 * Math.PI) - (Math.PI / 2);
-        const x = cx + radius * Math.cos(angle);
-        const y = cy + radius * Math.sin(angle);
+        let x = cx;
+        let y = cy;
+
+        // 1. Calculate (x, y) based on arrangement geometry
+        if (layout === 0) { // Single Ring
+          const radius = 58;
+          const angle = (mappedIdx / nPixels) * (2 * Math.PI) - (Math.PI / 2);
+          x = cx + radius * Math.cos(angle);
+          y = cy + radius * Math.sin(angle);
+        } else if (layout === 1) { // Spiral Wrap Strip (Cylindrical Beacon)
+          const turns = 2.4;
+          const spiralAngle = (mappedIdx / nPixels) * (turns * 2 * Math.PI) - (Math.PI / 2);
+          const rx = 52;
+          x = cx + rx * Math.cos(spiralAngle);
+          y = (cy + 48) - (mappedIdx / Math.max(1, nPixels - 1)) * 96;
+        } else if (layout === 2) { // Parallel Columns
+          const half = Math.ceil(nPixels / 2);
+          const isFirstCol = (mappedIdx < half);
+          const colX = isFirstCol ? (cx - 38) : (cx + 38);
+          const colStep = isFirstCol ? mappedIdx : (nPixels - 1 - mappedIdx);
+          const colTotal = isFirstCol ? half : (nPixels - half);
+          x = colX;
+          y = (cy - 48) + (colStep / Math.max(1, colTotal - 1)) * 96;
+        } else { // 3: Linear Strip / Bar
+          const barWidth = Math.min(180, nPixels * 14);
+          x = (cx - barWidth / 2) + (mappedIdx / Math.max(1, nPixels - 1)) * barWidth;
+          y = cy;
+        }
 
         let alpha = 0.15;
         let fill = teamHex;
 
-        if (effect === 0) { // Halogen Beacon
-          const dist = Math.min(Math.abs(i - previewStep), Math.abs(i - previewStep + nPixels), Math.abs(i - previewStep - nPixels));
-          if (dist === 0) alpha = 1.0;
-          else if (dist === 1) alpha = 0.55;
-          else if (dist === 2) alpha = 0.2;
-          else alpha = 0.05;
-        } else if (effect === 1) { // Arena Strobe
-          alpha = (previewStep % 2 === 0) ? 1.0 : 0.05;
-          fill = (previewStep % 4 === 0) ? '#ffffff' : teamHex;
-        } else if (effect === 2) { // Breathe
-          alpha = (Math.sin(previewStep * 0.15) + 1.0) / 2.0 * 0.9 + 0.1;
-        } else if (effect === 3) { // Dual Siren
-          const half = Math.floor(nPixels / 2);
-          const isLeft = (i < half);
-          const sideA = ((previewStep % 12) < 6);
-          const flashOn = (previewStep % 2 === 0);
-          if (flashOn && ((sideA && isLeft) || (!sideA && !isLeft))) {
-            alpha = 1.0;
-            fill = isLeft ? teamHex : '#ffffff';
-          } else {
-            alpha = 0.08;
+        // 2. Calculate animation state
+        if (visualiserMode === 'celebration') {
+          if (effect === 0) { // Rotating Halogen Beacon (Fixed continuous modulo wrap)
+            const head = Math.floor(previewStep / 3) % nPixels;
+            const rawDiff = Math.abs(i - head);
+            const dist = Math.min(rawDiff, nPixels - rawDiff);
+            if (dist === 0) alpha = 1.0;
+            else if (dist === 1) alpha = 0.65;
+            else if (dist === 2) alpha = 0.25;
+            else alpha = 0.05;
+            fill = teamHex;
+          } else if (effect === 1) { // Arena Strobe
+            const flash = (previewStep % 4 < 2);
+            alpha = flash ? 1.0 : 0.05;
+            fill = (previewStep % 8 < 4) ? '#ffffff' : teamHex;
+          } else if (effect === 2) { // Breathe
+            alpha = 0.15 + 0.85 * (Math.sin(previewStep * 0.12) + 1.0) / 2.0;
+            fill = teamHex;
+          } else if (effect === 3) { // Dual Siren
+            const half = Math.floor(nPixels / 2);
+            const isLeft = (i < half);
+            const sideA = ((previewStep % 16) < 8);
+            const flashOn = (previewStep % 4 < 2);
+            if (flashOn && ((sideA && isLeft) || (!sideA && !isLeft))) {
+              alpha = 1.0;
+              fill = isLeft ? teamHex : '#ffffff';
+            } else {
+              alpha = 0.08;
+              fill = isLeft ? teamHex : '#ffffff';
+            }
+          } else if (effect === 4) { // Heartbeat
+            const sub = previewStep % 24;
+            alpha = (sub === 0 || sub === 1 || sub === 2 || sub === 6 || sub === 7 || sub === 8) ? 1.0 : 0.08;
+            fill = teamHex;
           }
-        } else if (effect === 4) { // Heartbeat
-          const sub = previewStep % 16;
-          alpha = (sub === 0 || sub === 1 || sub === 4 || sub === 5) ? 1.0 : 0.1;
+        } else {
+          // Idle Mode Effects
+          if (idleEff === 0) { // Off
+            alpha = 0.04;
+            fill = '#444444';
+          } else if (idleEff === 1) { // Breathe
+            alpha = 0.12 + 0.65 * (Math.sin(previewStep * 0.05) + 1.0) / 2.0;
+            fill = teamHex;
+          } else if (idleEff === 2) { // Solid Accent
+            alpha = 0.65;
+            fill = teamHex;
+          } else if (idleEff === 3) { // Candle / Ember Flicker
+            const f1 = Math.sin(previewStep * 0.18 + i * 2.1);
+            const f2 = Math.sin(previewStep * 0.35 + i * 4.7);
+            alpha = 0.2 + 0.65 * ((f1 + f2 + 2) / 4);
+            fill = '#ff7700';
+          } else if (idleEff === 4) { // Orbit Sweep
+            const orbitHead = Math.floor(previewStep / 5) % nPixels;
+            const rawDiff = Math.abs(i - orbitHead);
+            const dist = Math.min(rawDiff, nPixels - rawDiff);
+            if (dist === 0) alpha = 0.9;
+            else if (dist === 1) alpha = 0.38;
+            else alpha = 0.06;
+            fill = teamHex;
+          }
         }
 
         ringCtx.beginPath();
@@ -1029,6 +1339,16 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         ringCtx.lineWidth = 1;
         ringCtx.strokeStyle = 'rgba(255,255,255,0.2)';
         ringCtx.stroke();
+      }
+
+      // Update caption
+      const cap = document.getElementById('previewCaption');
+      if (cap && previewStep % 30 === 0) {
+        const layoutNames = ['Single Ring', 'Spiral Wrap', 'Parallel Columns', 'Linear Strip'];
+        const celebNames = ['Halogen Beacon', 'Arena Strobe', 'Team Breathe', 'Dual Siren', 'Heartbeat Pulse'];
+        const idleNames = ['Dark (Off)', 'Team Breathe', 'Solid Accent', 'Ember Flicker', 'Orbit Sweep'];
+        const activeName = (visualiserMode === 'celebration') ? celebNames[effect] : idleNames[idleEff];
+        cap.textContent = `${activeName} • ${layoutNames[layout] || 'Ring'}`;
       }
 
       previewStep++;
@@ -1064,8 +1384,6 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     wifiSelect.onchange = () => {
       if (wifiSelect.value && wifiSelect.value !== '__manual__') {
         wifiSsid.value = wifiSelect.value;
-      } else if (wifiSelect.value === '__manual__') {
-        wifiSsid.focus();
       }
     };
 
@@ -1211,6 +1529,41 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         fetchScan();
       }).catch(console.error);
 
+    let deviceMacHostname = '';
+
+    function deriveHostname(name, fallback) {
+      if (!name || !name.trim()) return fallback || 'goallight.local';
+      const trimmed = name.trim();
+      // Match "NHL Goal Light X" or "Goal Light X"
+      const nhlMatch = trimmed.match(/^(?:NHL\s+Goal\s+Light|Goal\s+Light)(?:\s*[-_ ]*\s*(.*))?$/i);
+      if (nhlMatch) {
+        const suffix = nhlMatch[1] ? nhlMatch[1].trim() : '';
+        if (suffix) {
+          const slug = suffix.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+          return 'goallight-' + slug + '.local';
+        } else {
+          // Exactly "NHL Goal Light" -> return fallback with MAC if available
+          return fallback || 'goallight.local';
+        }
+      }
+      // Generic custom name (e.g. "Man Cave" -> "man-cave.local")
+      const slug = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      return (slug || 'goallight') + '.local';
+    }
+
+    // Upcoming Game View Switcher
+    window.setUpcomingView = function(view) {
+      const isSimple = (view === 'simple');
+      const btnS = document.getElementById('btnViewSimple');
+      const btnD = document.getElementById('btnViewDetailed');
+      const simV = document.getElementById('upcomingSimpleView');
+      const detV = document.getElementById('upcomingDetailedView');
+      if (btnS) btnS.classList.toggle('active', isSimple);
+      if (btnD) btnD.classList.toggle('active', !isSimple);
+      if (simV) simV.style.display = isSimple ? 'block' : 'none';
+      if (detV) detV.style.display = isSimple ? 'none' : 'block';
+    };
+
     // Live Game & Status Polling
     function refreshStatus() {
       fetch('/api/status')
@@ -1221,7 +1574,15 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             document.getElementById('titleDeviceName').textContent = '🚨 ' + s.system.deviceName;
           }
 
-          if (s.game && s.game.state === 'LIVE') {
+          // If in AP Setup Mode and user has not intentionally navigated to another tab, stay on system tab
+          if (!userNavigated && s.system && s.system.isApMode) {
+            switchTab('system');
+          }
+
+          const cardLive = document.getElementById('cardLiveGame');
+          const isLiveGame = (s.game && s.game.state === 'LIVE');
+
+          if (isLiveGame) {
             badge.className = 'badge live';
             badge.textContent = `● LIVE: ${s.game.awayAbbrev} ${s.game.awayScore} - ${s.game.homeScore} ${s.game.homeAbbrev}`;
             document.getElementById('liveAwayTeam').textContent = s.game.awayAbbrev || 'AWY';
@@ -1237,16 +1598,78 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             const interm = !!s.game.inIntermission;
             document.getElementById('liveIntermissionNote').style.display = interm ? 'inline' : 'none';
             document.getElementById('liveStatusSubtext').textContent = interm ? 'Intermission in progress.' : 'Live game active.';
+            if (cardLive) cardLive.style.display = 'block';
           } else if (s.system && s.system.connected) {
             badge.className = 'badge';
             badge.textContent = `Online (${s.system.team})`;
-            document.getElementById('liveGameClock').textContent = 'Final / Off';
+            document.getElementById('liveGameClock').textContent = 'No Live Game';
             document.getElementById('syncNhlClock').textContent = '--:--';
             document.getElementById('syncNhlPeriod').textContent = 'No Live Game Right Now';
+            document.getElementById('liveIntermissionNote').style.display = 'none';
+            document.getElementById('liveStatusSubtext').textContent = 'No game currently in progress.';
           } else {
             badge.className = 'badge';
             badge.textContent = 'AP Setup Mode (192.168.4.1)';
             document.getElementById('liveGameClock').textContent = 'Setup Mode';
+            document.getElementById('liveStatusSubtext').textContent = 'Configure home Wi-Fi to start.';
+          }
+
+          // Upcoming Game Details (Simple & Detailed Views)
+          if (s.upcoming && s.upcoming.valid) {
+            const up = s.upcoming;
+            const isHome = !!up.isHome;
+            const myTeam = s.system ? s.system.team : 'TOR';
+            const opp = up.opponent || 'OPP';
+            const oppName = up.opponentName || opp;
+            const homeAbbrev = isHome ? myTeam : opp;
+            const awayAbbrev = isHome ? opp : myTeam;
+
+            let dateStr = up.date || '';
+            let timeStr = '';
+            if (up.timeUTC) {
+              try {
+                const d = new Date(up.timeUTC);
+                dateStr = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                timeStr = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+              } catch (e) {
+                timeStr = up.timeUTC;
+              }
+            }
+
+            document.getElementById('upSimpleAway').textContent = awayAbbrev;
+            document.getElementById('upSimpleHome').textContent = homeAbbrev;
+            document.getElementById('upSimpleAwayLabel').textContent = isHome ? `Away (${opp})` : `${myTeam} (Away)`;
+            document.getElementById('upSimpleHomeLabel').textContent = isHome ? `${myTeam} (Home)` : `Home (${opp})`;
+            document.getElementById('upSimpleDate').textContent = dateStr;
+            document.getElementById('upSimpleTime').textContent = timeStr || 'Time TBA';
+            document.getElementById('upSimpleVenue').textContent = '📍 ' + (up.venue || 'Arena TBD');
+            document.getElementById('upSimpleBroadcasts').textContent = '📺 ' + (up.broadcasts || 'TV TBA');
+
+            // Detailed view fields
+            document.getElementById('upDetMatchupTitle').textContent = `${awayAbbrev} @ ${homeAbbrev} (${oppName})`;
+            const badgeEl = document.getElementById('upDetHomeAwayBadge');
+            if (badgeEl) {
+              badgeEl.textContent = isHome ? '🏠 Home Game' : '✈️ Road Game';
+              badgeEl.style.background = isHome ? 'rgba(46,160,67,0.15)' : 'rgba(230,57,70,0.15)';
+              badgeEl.style.borderColor = isHome ? 'var(--success)' : 'var(--accent)';
+              badgeEl.style.color = isHome ? 'var(--success)' : 'var(--accent)';
+            }
+            document.getElementById('upDetDate').textContent = dateStr || 'TBD';
+            document.getElementById('upDetTime').textContent = timeStr ? `${timeStr} (Local Time)` : 'Time TBA';
+            document.getElementById('upDetVenue').textContent = up.venue || 'Arena to be announced';
+            document.getElementById('upDetBroadcasts').textContent = up.broadcasts || 'Broadcasters pending';
+            document.getElementById('upDetRadio').textContent = `${myTeam} Audio Network & NHL App`;
+            if (up.gameId) {
+              document.getElementById('upDetNhlLink').href = `https://www.nhl.com/gamecenter/${up.gameId}`;
+            }
+          } else {
+            document.getElementById('upSimpleDate').textContent = 'No Games Scheduled This Week';
+            document.getElementById('upSimpleTime').textContent = 'Off';
+            document.getElementById('upSimpleVenue').textContent = '📍 Off-season or bye week';
+            document.getElementById('upSimpleBroadcasts').textContent = 'NHL.com';
+            document.getElementById('upDetDate').textContent = 'No upcoming games scheduled';
+            document.getElementById('upDetVenue').textContent = 'Enjoy the off-days!';
+            document.getElementById('upDetBroadcasts').textContent = 'Check NHL.com for updates';
           }
 
           if (s.system) {
@@ -1254,8 +1677,13 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             if (s.system.freeHeap) document.getElementById('diagHeap').textContent = `${Math.round(s.system.freeHeap / 1024)} KB`;
             document.getElementById('diagIp').textContent = window.location.hostname;
             if (s.system.hostname) {
+              deviceMacHostname = s.system.hostname;
               const lbl = document.getElementById('lblMdnsUrl');
-              if (lbl) lbl.textContent = 'http://' + s.system.hostname;
+              const devInp = document.getElementById('deviceNameInput');
+              // Only update if user is not actively editing the name field
+              if (lbl && devInp && document.activeElement !== devInp) {
+                lbl.textContent = 'http://' + deriveHostname(devInp.value, deviceMacHostname);
+              }
             }
           }
         }).catch(() => {});
@@ -1267,37 +1695,55 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     const devInput = document.getElementById('deviceNameInput');
     if (devInput) {
       devInput.oninput = function() {
-        const val = this.value.trim();
-        const slug = val ? val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') : 'goallight';
         const lbl = document.getElementById('lblMdnsUrl');
-        if (lbl) lbl.textContent = 'http://' + (slug || 'goallight') + '.local';
+        if (lbl) lbl.textContent = 'http://' + deriveHostname(this.value, deviceMacHostname || 'goallight.local');
       };
     }
 
-    // Test Celebration Buttons (transmits active effect immediately)
-    document.getElementById('btnTestCelebration').onclick = () => {
-      const effectVal = parseInt(document.getElementById('effectSelect').value) || 0;
-      fetch('/api/test', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({horn: true, light: true, effect: effectVal})
-      });
-    };
-    document.getElementById('btnTestLightsOnly').onclick = () => {
-      const effectVal = parseInt(document.getElementById('effectSelect').value) || 0;
-      fetch('/api/test', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({horn: false, light: true, effect: effectVal})
-      });
-    };
-    document.getElementById('btnTestHornOnly').onclick = () => {
-      fetch('/api/test', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({horn: true, light: false})
-      });
-    };
+    // Event Simulator Studio (Dedicated Testing Controls)
+    const simEvent = document.getElementById('simEventSelect');
+    const simEffectGroup = document.getElementById('simEffectGroup');
+    const simEffect = document.getElementById('simEffectSelect');
+
+    if (simEvent && simEffectGroup) {
+      simEvent.onchange = () => {
+        simEffectGroup.style.display = (simEvent.value === 'goal') ? 'block' : 'none';
+      };
+    }
+
+    const btnRunSim = document.getElementById('btnRunSimTest');
+    if (btnRunSim) {
+      btnRunSim.onclick = () => {
+        const ev = simEvent ? simEvent.value : 'goal';
+        const effectVal = simEffect ? (parseInt(simEffect.value) || 0) : 0;
+        const lights = document.getElementById('chkSimLights') ? document.getElementById('chkSimLights').checked : true;
+        const horn = document.getElementById('chkSimHorn') ? document.getElementById('chkSimHorn').checked : true;
+        const display = document.getElementById('chkSimDisplay') ? document.getElementById('chkSimDisplay').checked : true;
+
+        fetch('/api/test', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            event: ev,
+            effect: effectVal,
+            light: lights,
+            horn: horn,
+            display: display
+          })
+        }).catch(console.error);
+      };
+    }
+
+    const btnStopSim = document.getElementById('btnStopSimTest');
+    if (btnStopSim) {
+      btnStopSim.onclick = () => {
+        fetch('/api/test', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ event: 'stop' })
+        }).catch(console.error);
+      };
+    }
 
     // Save & Reboot Flow
     const saveModal = document.getElementById('saveModal');
@@ -1323,7 +1769,6 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       if (isApModeActive && !targetSsid) {
         alert('⚠️ Please select or enter your Wi-Fi Network Name (SSID) before saving!');
         switchTab('system');
-        wifiSsid.focus();
         return;
       }
 
@@ -1411,8 +1856,30 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     const otaBar = document.getElementById('otaBar');
     const otaText = document.getElementById('otaText');
 
+    // Helper: Parse semver / quad-ver strings like "v1.1.0.1" into [1, 1, 0, 1]
+    function parseSemVer(vStr) {
+      if (!vStr) return [0, 0, 0, 0];
+      const cleaned = vStr.replace(/^v/i, '').trim();
+      const parts = cleaned.split(/[\.-]/).map(p => parseInt(p, 10) || 0);
+      while (parts.length < 4) parts.push(0);
+      return parts;
+    }
+
+    function compareVersions(vA, vB) {
+      const pA = parseSemVer(vA);
+      const pB = parseSemVer(vB);
+      for (let i = 0; i < Math.max(pA.length, pB.length); i++) {
+        const a = pA[i] || 0;
+        const b = pB[i] || 0;
+        if (a > b) return 1;
+        if (a < b) return -1;
+      }
+      return 0;
+    }
+
     btnCheckUpdate.onclick = () => {
       btnCheckUpdate.textContent = 'Checking...';
+      const includeBeta = document.getElementById('chkIncludeBeta') ? document.getElementById('chkIncludeBeta').checked : false;
 
       const checkPagesManifest = () => {
         return fetch('https://revelrob.github.io/NHLGoalLight/manifest.json?t=' + Date.now())
@@ -1433,29 +1900,46 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
           });
       };
 
-      fetch('https://api.github.com/repos/RevelRob/NHLGoalLight/releases/latest')
+      const githubUrl = includeBeta
+        ? 'https://api.github.com/repos/RevelRob/NHLGoalLight/releases'
+        : 'https://api.github.com/repos/RevelRob/NHLGoalLight/releases/latest';
+
+      fetch(githubUrl)
         .then(r => {
           if (!r.ok) return checkPagesManifest();
           return r.json();
         })
+        .then(data => {
+          let rel = data;
+          if (Array.isArray(data)) {
+            rel = data[0] || null;
+          }
+          if (!rel || (!rel.tag_name && !rel.name)) return checkPagesManifest();
+          return rel;
+        })
         .catch(() => checkPagesManifest())
         .then(rel => {
           btnCheckUpdate.textContent = '🔍 Check GitHub';
-          const latestTag = rel.tag_name || rel.name;
-          const currentTag = document.getElementById('curVer').textContent;
+          const latestTag = rel.tag_name || rel.name || '';
+          const currentTag = document.getElementById('curVer').textContent.trim();
           updateInfo.style.display = 'block';
-          if (latestTag !== currentTag && latestTag) {
+
+          const cmp = compareVersions(latestTag, currentTag);
+
+          if (cmp > 0 && latestTag) {
             updateInfo.style.borderColor = '#e63946';
             updateInfo.style.background = 'rgba(230,57,70,0.15)';
             let binAsset = rel.assets && rel.assets.find(a => a.name.endsWith('.bin'));
-            let assetUrl = binAsset ? binAsset.browser_download_url : rel.html_url;
-            updateInfo.innerHTML = `<strong>✨ Update Available: ${latestTag}</strong><br>` +
+            let assetUrl = binAsset ? binAsset.browser_download_url : 'https://revelrob.github.io/NHLGoalLight/builds/firmware.bin';
+            const isBetaRel = rel.prerelease || latestTag.toLowerCase().includes('beta') || latestTag.toLowerCase().includes('rc');
+
+            updateInfo.innerHTML = `<strong>✨ ${isBetaRel ? '🧪 Beta Update' : 'New Update'} Available: ${latestTag}</strong><br>` +
               `Release notes: ${rel.body ? rel.body.substring(0, 150) : 'Performance improvements and fixes'}<br><br>` +
               `<button type="button" id="btn1ClickUpdate" style="width:100%; padding:10px 14px; background:var(--accent); color:#fff; border:none; border-radius:8px; font-weight:700; font-size:0.88rem; cursor:pointer; margin-bottom:8px; display:flex; align-items:center; justify-content:center; gap:6px;">⚡ 1-Click Direct Install (${latestTag})</button>` +
               `<span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:10px;">The Goal Light will download directly over Wi-Fi and flash itself. No files saved to your phone!</span>` +
               `<details style="font-size:0.78rem; color:var(--text-muted);"><summary style="cursor:pointer; color:#58a6ff;">Manual File Download Options</summary><div style="margin-top:8px;">` +
               `<a href="${assetUrl}" target="_blank" style="display:inline-block; padding:5px 10px; background:var(--btn-bg); border:1px solid var(--border); color:var(--text); border-radius:6px; text-decoration:none; font-size:0.75rem; margin-right:8px;">📥 Download ${binAsset ? binAsset.name : 'firmware.bin'}</a>` +
-              `<a href="${rel.html_url}" target="_blank" style="color:#58a6ff; text-decoration:underline; font-size:0.75rem;">View on GitHub</a>` +
+              `<a href="${rel.html_url || 'https://github.com/RevelRob/NHLGoalLight'}" target="_blank" style="color:#58a6ff; text-decoration:underline; font-size:0.75rem;">View on GitHub</a>` +
               `</div></details>`;
 
             const btn1Click = document.getElementById('btn1ClickUpdate');
@@ -1492,7 +1976,11 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
           } else {
             updateInfo.style.borderColor = 'var(--success)';
             updateInfo.style.background = 'rgba(46,160,67,0.15)';
-            updateInfo.innerHTML = `<strong>✅ Firmware Up to Date (${currentTag})</strong>`;
+            if (cmp < 0) {
+              updateInfo.innerHTML = `<strong>✅ Firmware Up to Date!</strong><br><span style="font-size:0.8rem; color:var(--text-muted);">Installed build (${currentTag}) is newer than latest public release (${latestTag}).</span>`;
+            } else {
+              updateInfo.innerHTML = `<strong>✅ Firmware Up to Date (${currentTag})</strong><br><span style="font-size:0.8rem; color:var(--text-muted);">You are running the latest version.</span>`;
+            }
           }
         })
         .catch(err => {

@@ -3,135 +3,726 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Flash NHL Goal Light</title>
+  <title>DIY NHL Goal Light - Free & Open Source Hockey Celebration Beacon</title>
+  <meta name="description" content="Build your own real-time DIY NHL Goal Light with an ESP32-S3 and NeoPixels. 100% free, open-source, web-flashed, and Home Assistant compatible.">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="icon" type="image/png" href="icon.png">
-  <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
   <style>
     :root {
-      --bg: #0d1117;
-      --card: #161b22;
-      --border: #30363d;
-      --accent: #e63946;
+      --bg: #0b0e14;
+      --card-bg: #151b23;
+      --card-border: #30363d;
+      --card-hover: #1c2430;
       --text: #f0f6fc;
-      --muted: #8b949e;
+      --text-muted: #8b949e;
+      --accent: #e63946;
+      --accent-glow: rgba(230, 57, 70, 0.4);
+      --gold: #f59e0b;
+      --ice: #38bdf8;
+      --success: #2ea043;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
-    * { box-sizing: border-box; }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: var(--bg);
+      font-family: var(--font);
+      background-color: var(--bg);
       color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* Navigation */
+    .navbar {
       display: flex;
-      flex-direction: column;
+      justify-content: space-between;
       align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      margin: 0;
-      padding: 20px;
-      text-align: center;
+      padding: 16px 28px;
+      background: rgba(11, 14, 20, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--card-border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
-    .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 36px 28px;
-      max-width: 480px;
-      width: 100%;
-      box-shadow: 0 16px 40px rgba(0,0,0,0.6);
-    }
-    .badge {
-      display: inline-block;
-      font-size: 0.8rem;
-      font-weight: 700;
-      padding: 4px 10px;
-      border-radius: 20px;
-      background: rgba(230, 57, 70, 0.15);
-      color: var(--accent);
-      margin-bottom: 12px;
-      border: 1px solid rgba(230, 57, 70, 0.3);
-    }
-    h1 {
-      margin: 0 0 10px;
-      font-size: 1.8rem;
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: var(--text);
+      text-decoration: none;
       letter-spacing: -0.5px;
     }
-    p {
-      color: var(--muted);
-      line-height: 1.6;
-      font-size: 0.95rem;
-      margin-bottom: 24px;
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 16px;
     }
-    .steps {
-      text-align: left;
-      background: rgba(255,255,255,0.02);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 16px 20px;
-      margin-bottom: 24px;
-      font-size: 0.88rem;
+    .nav-link {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: color 0.2s;
     }
-    .steps ol { margin-left: 18px; }
-    .steps li { margin-bottom: 8px; color: #c9d1d9; }
-    .steps li:last-child { margin-bottom: 0; }
-    .button-container {
-      margin-top: 10px;
-    }
-    button.flash-btn {
-      padding: 14px 28px;
-      font-size: 1rem;
-      font-weight: 700;
+    .nav-link:hover { color: var(--text); }
+    .nav-btn {
+      padding: 8px 16px;
       background: var(--accent);
       color: white;
-      border: none;
-      border-radius: 10px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      box-shadow: 0 4px 14px rgba(230, 57, 70, 0.4);
+      text-decoration: none;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      transition: all 0.2s;
+      box-shadow: 0 2px 10px var(--accent-glow);
     }
-    button.flash-btn:hover {
+    .nav-btn:hover {
       opacity: 0.92;
       transform: translateY(-1px);
     }
-    .warning {
-      color: #e3b341;
-      font-size: 0.8rem;
-      margin-top: 20px;
+
+    /* Container */
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 0 20px;
     }
+
+    /* Hero Section */
+    .hero {
+      padding: 72px 0 54px;
+      text-align: center;
+      position: relative;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 30px;
+      background: rgba(230, 57, 70, 0.12);
+      border: 1px solid rgba(230, 57, 70, 0.3);
+      color: var(--accent);
+      font-size: 0.85rem;
+      font-weight: 700;
+      margin-bottom: 20px;
+    }
+    .hero h1 {
+      font-size: 3.2rem;
+      font-weight: 900;
+      letter-spacing: -1.2px;
+      line-height: 1.15;
+      margin-bottom: 20px;
+      background: linear-gradient(180deg, #ffffff 0%, #c9d1d9 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero p {
+      font-size: 1.2rem;
+      color: var(--text-muted);
+      max-width: 680px;
+      margin: 0 auto 32px;
+    }
+    .hero-actions {
+      display: flex;
+      justify-content: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-bottom: 36px;
+    }
+    .btn-primary {
+      padding: 14px 28px;
+      background: var(--accent);
+      color: white;
+      font-size: 1.05rem;
+      font-weight: 700;
+      border-radius: 12px;
+      text-decoration: none;
+      transition: all 0.2s;
+      box-shadow: 0 4px 20px var(--accent-glow);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 26px var(--accent-glow);
+    }
+    .btn-secondary {
+      padding: 14px 24px;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+      font-size: 1rem;
+      font-weight: 600;
+      border-radius: 12px;
+      text-decoration: none;
+      border: 1px solid var(--card-border);
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    /* Feature Grid */
+    .features {
+      padding: 40px 0 60px;
+    }
+    .section-title {
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -0.6px;
+      text-align: center;
+      margin-bottom: 12px;
+    }
+    .section-subtitle {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 1.05rem;
+      margin-bottom: 40px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+    .feature-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 26px;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .feature-card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(230, 57, 70, 0.5);
+    }
+    .feature-icon {
+      font-size: 2.2rem;
+      margin-bottom: 14px;
+      display: inline-block;
+    }
+    .feature-card h3 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .feature-card p {
+      color: var(--text-muted);
+      font-size: 0.92rem;
+      line-height: 1.55;
+    }
+
+    /* Hardware Table */
+    .hardware-section {
+      padding: 50px 0;
+      border-top: 1px solid var(--card-border);
+    }
+    .parts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-top: 28px;
+    }
+    @media (max-width: 768px) {
+      .parts-grid { grid-template-columns: 1fr; }
+      .hero h1 { font-size: 2.3rem; }
+      .nav-links .nav-link { display: none; }
+    }
+    .parts-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 26px;
+    }
+    .parts-card h3 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .parts-list {
+      list-style: none;
+    }
+    .parts-list li {
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.92rem;
+    }
+    .parts-list li:last-child { border-bottom: none; }
+    .part-name { font-weight: 600; color: var(--text); }
+    .part-desc { font-size: 0.8rem; color: var(--text-muted); display: block; }
+    .part-tag {
+      font-size: 0.75rem;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(46, 160, 67, 0.15);
+      color: #3fb950;
+      font-weight: 700;
+    }
+    .part-tag.optional {
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--ice);
+    }
+
+    /* Wiring Section */
+    .wiring-section {
+      padding: 50px 0;
+      border-top: 1px solid var(--card-border);
+    }
+    .wiring-table-wrap {
+      overflow-x: auto;
+      margin-top: 24px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+    }
+    table.wiring-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.9rem;
+    }
+    table.wiring-table th {
+      background: rgba(255, 255, 255, 0.04);
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--card-border);
+      font-weight: 700;
+      color: var(--text);
+    }
+    table.wiring-table td {
+      padding: 12px 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      color: #c9d1d9;
+    }
+    table.wiring-table tr:last-child td { border-bottom: none; }
+    .pin-badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      font-family: monospace;
+      font-weight: 700;
+      color: #58a6ff;
+    }
+
+    /* Guide Steps */
+    .steps-section {
+      padding: 50px 0;
+      border-top: 1px solid var(--card-border);
+    }
+    .step-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+      margin-top: 28px;
+    }
+    .step-box {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 22px;
+      position: relative;
+    }
+    .step-num {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: white;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+      font-size: 0.95rem;
+    }
+    .step-box h4 {
+      font-size: 1.1rem;
+      margin-bottom: 8px;
+    }
+    .step-box p {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* Transparency & Open Source */
+    .transparency-section {
+      padding: 50px 0;
+      border-top: 1px solid var(--card-border);
+    }
+    .callout-box {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 32px 28px;
+      margin-top: 24px;
+    }
+    .callout-box h3 {
+      font-size: 1.3rem;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .callout-box p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+    .callout-box p:last-child { margin-bottom: 0; }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--card-border);
+      padding: 40px 0;
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      background: #080a0f;
+    }
+    footer a {
+      color: #58a6ff;
+      text-decoration: none;
+    }
+    footer a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
-  <div class="card">
-    <div class="badge">ESP32-S3 SUPER MINI</div>
-    <h1>🚨 NHL Goal Light</h1>
-    <p>Install or update firmware directly from your web browser without installing any developer tools or drivers.</p>
 
-    <div class="steps">
-      <ol>
-        <li>Connect your <strong>ESP32-S3 Super Mini</strong> using a USB-C data cable.</li>
-        <li>Open this page in <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong>.</li>
-        <li>Click <strong>Install Firmware</strong> below and select the serial port.</li>
-        <li>Follow the prompts to connect the device to your Wi-Fi!</li>
-      </ol>
-    </div>
+  <!-- Navigation Bar -->
+  <header class="navbar">
+    <a href="#" class="nav-brand">
+      <span>🚨</span>
+      <span>NHL Goal Light</span>
+    </a>
+    <nav class="nav-links">
+      <a href="#features" class="nav-link">Features</a>
+      <a href="#hardware" class="nav-link">Hardware</a>
+      <a href="#wiring" class="nav-link">Wiring</a>
+      <a href="#guide" class="nav-link">Quick Start</a>
+      <a href="https://github.com/RevelRob/NHLGoalLight" target="_blank" class="nav-link">GitHub</a>
+      <a href="./flasher/" class="nav-btn">⚡ Web Flasher</a>
+    </nav>
+  </header>
 
-    <div class="button-container">
-      <esp-web-install-button manifest="./manifest.json">
-        <button slot="activate" class="flash-btn">
-          🚀 Install Firmware
-        </button>
-        <span slot="unsupported">
-          ⚠️ Web Serial is not supported in this browser. Please use Chrome, Edge, or Brave on a desktop computer.
-        </span>
-        <span slot="not-allowed">
-          ⚠️ Web Serial requires an HTTPS connection or localhost.
-        </span>
-      </esp-web-install-button>
-    </div>
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-badge">🍁 100% Free & Open-Source Hockey Project</div>
+      <h1>The Ultimate DIY Smart<br>NHL Goal Light</h1>
+      <p>A real-time connected goal beacon and horn for every hockey fan. Built with an ESP32-S3, vibrant NeoPixel ring, arena audio, Home Assistant support, and zero subscription fees.</p>
 
-    <div class="warning">
-      💡 Ensure your USB-C cable supports data transfer (not a power-only charge cable).
+      <div class="hero-actions">
+        <a href="./flasher/" class="btn-primary">
+          <span>⚡</span>
+          <span>Web Browser Flasher</span>
+        </a>
+        <a href="https://makerworld.com/en" target="_blank" class="btn-secondary" title="3D printable enclosure files coming soon on MakerWorld">
+          <span>🖨️</span>
+          <span>3D Print Files (MakerWorld)</span>
+        </a>
+        <a href="https://github.com/RevelRob/NHLGoalLight" target="_blank" class="btn-secondary">
+          <span>⭐</span>
+          <span>View on GitHub</span>
+        </a>
+      </div>
     </div>
-  </div>
+  </section>
+
+  <!-- Features Grid -->
+  <section id="features" class="features">
+    <div class="container">
+      <h2 class="section-title">Built for Real Hockey Fans</h2>
+      <p class="section-subtitle">Zero subscription costs. No cloud accounts required. Pure open-source hockey excitement.</p>
+
+      <div class="grid-3">
+        <div class="feature-card">
+          <div class="feature-icon">🏒</div>
+          <h3>Live NHL API Synchronisation</h3>
+          <p>Direct real-time polling against the official NHL cloud API. Automatically detects live goals, power play opportunities, intermission countdowns, and game win celebrations.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">💡</div>
+          <h3>5 Dynamic Celebration Lighting Modes</h3>
+          <p>Rotating Halogen Beacon, Arena Strobe, Team Colour Breathe, Dual Siren, and Heartbeat. Fully customizable for 16-LED rings, spirals, and custom strips with reverse rotation options.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🔊</div>
+          <h3>Arena Goal Horn & Sound Effects</h3>
+          <p>Optional DFPlayer Mini audio integration for authentic arena goal horns and team fight songs. Plays right through your 3W speaker or external home audio setup.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">📱</div>
+          <h3>Installable Web Application</h3>
+          <p>Save the control dashboard to your iPhone or Android home screen with one tap. Operates like a native app with zero browser address bar clutter and custom team icons.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🏡</div>
+          <h3>Home Assistant Smart Home Ready</h3>
+          <p>Includes built-in MQTT discovery entities and REST control endpoints. Integrate your goal beacon directly into Home Assistant automations and living room lighting.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">⏱️</div>
+          <h3>Broadcast Delay Matcher</h3>
+          <p>TV stream lagging behind real time? Adjust the synchronisation buffer anywhere from 0 to 120 seconds with simple +/- buttons to match your cable or streaming provider perfectly.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Hardware Section -->
+  <section id="hardware" class="hardware-section">
+    <div class="container">
+      <h2 class="section-title">Hardware & Parts List</h2>
+      <p class="section-subtitle">Everything you need to build this can be sourced for under $15-$25 online.</p>
+
+      <div class="parts-grid">
+        <div class="parts-card">
+          <h3>📦 Required Core Components</h3>
+          <ul class="parts-list">
+            <li>
+              <div>
+                <span class="part-name">ESP32-S3 Super Mini</span>
+                <span class="part-desc">Compact dual-core microcontroller with built-in Wi-Fi & USB-C (~$3-$5)</span>
+              </div>
+              <span class="part-tag">Required</span>
+            </li>
+            <li>
+              <div>
+                <span class="part-name">WS2812B RGB NeoPixel Ring (16 LEDs)</span>
+                <span class="part-desc">Bright, individually addressable 5V LED ring light (~$2-$4)</span>
+              </div>
+              <span class="part-tag">Required</span>
+            </li>
+            <li>
+              <div>
+                <span class="part-name">5V USB-C Power Supply & Data Cable</span>
+                <span class="part-desc">Standard phone charger (1A or higher) and USB-C data cable</span>
+              </div>
+              <span class="part-tag">Required</span>
+            </li>
+            <li>
+              <div>
+                <span class="part-name">Jumper Wires & Soldering Iron</span>
+                <span class="part-desc">Hookup wire or female-female Dupont wires for connections</span>
+              </div>
+              <span class="part-tag">Required</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="parts-card">
+          <h3>✨ Optional Upgrades</h3>
+          <ul class="parts-list">
+            <li>
+              <div>
+                <span class="part-name">DFPlayer Mini MP3 Player</span>
+                <span class="part-desc">Serial MP3 module for arena goal horn sounds and fight songs (~$2)</span>
+              </div>
+              <span class="part-tag.optional part-tag">Optional</span>
+            </li>
+            <li>
+              <div>
+                <span class="part-name">3W 4Ω/8Ω Mini Speaker</span>
+                <span class="part-desc">Small speaker for enclosure mounting (~$1-$2)</span>
+              </div>
+              <span class="part-tag.optional part-tag">Optional</span>
+            </li>
+            <li>
+              <div>
+                <span class="part-name">MicroSD Card (1GB - 32GB)</span>
+                <span class="part-desc">FAT32 formatted card to store team goal horn sound files</span>
+              </div>
+              <span class="part-tag.optional part-tag">Optional</span>
+            </li>
+            <li>
+              <div>
+                <span class="part-name">Tactile Momentary Pushbutton</span>
+                <span class="part-desc">Physical celebration test button to trigger lights & horn anytime</span>
+              </div>
+              <span class="part-tag.optional part-tag">Optional</span>
+            </li>
+            <li>
+              <div>
+                <span class="part-name">GC9A01 1.28" Round LCD Display</span>
+                <span class="part-desc">Round color screen for live game scores & periods (Phase 3 Roadmap)</span>
+              </div>
+              <span class="part-tag.optional part-tag">Optional</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Wiring Section -->
+  <section id="wiring" class="wiring-section">
+    <div class="container">
+      <h2 class="section-title">Wiring & Pin Connections</h2>
+      <p class="section-subtitle">Straightforward, beginner-friendly wiring for the ESP32-S3 Super Mini.</p>
+
+      <div class="wiring-table-wrap">
+        <table class="wiring-table">
+          <thead>
+            <tr>
+              <th>Component</th>
+              <th>Component Pin</th>
+              <th>ESP32-S3 Pin</th>
+              <th>Description / Wiring Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>NeoPixel Ring</strong></td>
+              <td><span class="pin-badge">5V / VCC</span></td>
+              <td><span class="pin-badge">5V</span></td>
+              <td>Connect to ESP32 5V rail (or direct 5V input)</td>
+            </tr>
+            <tr>
+              <td><strong>NeoPixel Ring</strong></td>
+              <td><span class="pin-badge">GND</span></td>
+              <td><span class="pin-badge">GND</span></td>
+              <td>Common system ground</td>
+            </tr>
+            <tr>
+              <td><strong>NeoPixel Ring</strong></td>
+              <td><span class="pin-badge">DI / DIN</span></td>
+              <td><span class="pin-badge">GPIO 4</span></td>
+              <td>Addressable data signal (optional 330Ω resistor in series)</td>
+            </tr>
+            <tr>
+              <td><strong>Tactile Button (Optional)</strong></td>
+              <td><span class="pin-badge">Pin A</span></td>
+              <td><span class="pin-badge">GPIO 9</span></td>
+              <td>Configured with internal pull-up (INPUT_PULLUP)</td>
+            </tr>
+            <tr>
+              <td><strong>Tactile Button (Optional)</strong></td>
+              <td><span class="pin-badge">Pin B</span></td>
+              <td><span class="pin-badge">GND</span></td>
+              <td>Pressing button pulls GPIO 9 to GND to trigger test</td>
+            </tr>
+            <tr>
+              <td><strong>DFPlayer Mini (Optional)</strong></td>
+              <td><span class="pin-badge">VCC</span></td>
+              <td><span class="pin-badge">5V</span></td>
+              <td>5V power rail</td>
+            </tr>
+            <tr>
+              <td><strong>DFPlayer Mini (Optional)</strong></td>
+              <td><span class="pin-badge">GND</span></td>
+              <td><span class="pin-badge">GND</span></td>
+              <td>Common ground</td>
+            </tr>
+            <tr>
+              <td><strong>DFPlayer Mini (Optional)</strong></td>
+              <td><span class="pin-badge">RX</span></td>
+              <td><span class="pin-badge">GPIO 1 (TX)</span></td>
+              <td>Serial transmit from ESP32 (recommended 1kΩ resistor in series)</td>
+            </tr>
+            <tr>
+              <td><strong>DFPlayer Mini (Optional)</strong></td>
+              <td><span class="pin-badge">TX</span></td>
+              <td><span class="pin-badge">GPIO 2 (RX)</span></td>
+              <td>Serial receive into ESP32</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Step-by-Step Guide -->
+  <section id="guide" class="steps-section">
+    <div class="container">
+      <h2 class="section-title">Easy Assembly in 4 Steps</h2>
+      <p class="section-subtitle">You don't need any programming skills or software installations to get up and running.</p>
+
+      <div class="step-grid">
+        <div class="step-box">
+          <div class="step-num">1</div>
+          <h4>3D Print Enclosure</h4>
+          <p>Download the free 3D printable STL files from MakerWorld (placeholder coming soon) and print the base and translucent beacon lens.</p>
+        </div>
+
+        <div class="step-box">
+          <div class="step-num">2</div>
+          <h4>Wire Components</h4>
+          <p>Connect your ESP32-S3, NeoPixel ring, and optional speaker according to the wiring diagram above.</p>
+        </div>
+
+        <div class="step-box">
+          <div class="step-num">3</div>
+          <h4>1-Click Web Flash</h4>
+          <p>Plug into your PC or Mac via USB-C, open our <a href="./flasher/" style="color:#58a6ff; font-weight:700;">Web Flasher</a> in Chrome or Edge, and click Install. Ready in 60 seconds!</p>
+        </div>
+
+        <div class="step-box">
+          <div class="step-num">4</div>
+          <h4>Pick Your Team</h4>
+          <p>Connect your phone to the <strong>NHL-Goal-Light-Setup</strong> Wi-Fi, select your favourite NHL team, and save. Game on!</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Open Source, Donations & Vibe Coding Transparency -->
+  <section class="transparency-section">
+    <div class="container">
+      <h2 class="section-title">Open Source, Community & Transparency</h2>
+      <p class="section-subtitle">Why this project exists, how it was created, and our commitment to the hockey community.</p>
+
+      <div class="callout-box">
+        <h3>🏒 100% Free & Open Source (No Subscriptions Ever)</h3>
+        <p>This project was started for personal enjoyment and shared openly so any hockey fan can build their own goal light without paying hundreds of dollars for commercial devices or monthly subscriptions. The source code, 3D printable files, and wiring guides are released completely free under the permissive MIT Open Source license.</p>
+
+        <h3 style="margin-top:24px;">🤖 Proudly Vibe Coded</h3>
+        <p>This entire project is proudly <strong>vibe coded</strong> — engineered collaboratively through modern AI pair-programming and real-world hardware testing. In an era where AI-assisted development is sometimes questioned, we believe in radical transparency: the entire codebase is 100% open on GitHub for security verification, peer review, and pull requests from other makers.</p>
+
+        <h3 style="margin-top:24px;">☕ Voluntary Community Donations</h3>
+        <p>There are no required fees, paywalls, or feature locks. If you build this goal light and love having it celebrate your team's goals, voluntary contributions are warmly welcomed to help fund experimental development hardware, test sensors, and hockey coffee!</p>
+
+        <div style="margin-top:20px; display:flex; gap:12px; flex-wrap:wrap;">
+          <a href="https://github.com/RevelRob/NHLGoalLight" target="_blank" class="btn-secondary" style="font-size:0.88rem; padding:10px 18px;">⭐ Star on GitHub</a>
+          <a href="./flasher/" class="btn-primary" style="font-size:0.88rem; padding:10px 18px;">⚡ Open Web Flasher</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p style="margin-bottom:8px;">NHL Goal Light Project · 🍁 Built with passion in Canada</p>
+      <p style="font-size:0.78rem; color:var(--text-muted);">
+        NHL and NHL team marks are the property of the NHL and its teams. This is an independent, non-commercial open-source fan project.<br>
+        Source code available on <a href="https://github.com/RevelRob/NHLGoalLight" target="_blank">GitHub (RevelRob/NHLGoalLight)</a>.
+      </p>
+    </div>
+  </footer>
+
 </body>
 </html>

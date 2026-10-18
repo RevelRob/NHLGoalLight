@@ -88,6 +88,17 @@ public:
 #endif
   }
 
+  void playChirp() {
+#if HAS_DFPLAYER_LIB
+    if (!connected) return;
+    int vol = VOLUME_LEVELS[volumeIndex];
+    if (vol == 0) return; // Muted
+    dfplayer.playFileNum(TRACK_TEST_HORN);
+    delay(300);
+    dfplayer.pause();
+#endif
+  }
+
   void stop() {
 #if HAS_DFPLAYER_LIB
     if (connected) {

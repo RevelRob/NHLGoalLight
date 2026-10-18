@@ -55,12 +55,66 @@ void triggerOpponentGoal();
 void triggerGameWin();
 
 void generateHostname(const char* name, char* out, size_t maxLen) {
-  if (name == nullptr || strlen(name) == 0 || strcmp(name, "NHL Goal Light") == 0) {
+  if (name == nullptr || strlen(name) == 0) {
     uint8_t mac[6];
     WiFi.macAddress(mac);
     snprintf(out, maxLen, "%s-%02x%02x", MDNS_HOSTNAME, mac[4], mac[5]);
     return;
   }
+
+  // Check if name begins with "NHL Goal Light" or "Goal Light"
+  const char* suffix = nullptr;
+  if (strncasecmp(name, "NHL Goal Light", 14) == 0) {
+    const char* p = name + 14;
+    while (*p == ' ' || *p == '-' || *p == '_') p++;
+    if (*p != '\0') {
+      suffix = p;
+    } else {
+      // Exactly "NHL Goal Light" with no suffix -> fallback to unique MAC hash
+      uint8_t mac[6];
+      WiFi.macAddress(mac);
+      snprintf(out, maxLen, "%s-%02x%02x", MDNS_HOSTNAME, mac[4], mac[5]);
+      return;
+    }
+  } else if (strncasecmp(name, "Goal Light", 10) == 0) {
+    const char* p = name + 10;
+    while (*p == ' ' || *p == '-' || *p == '_') p++;
+    if (*p != '\0') {
+      suffix = p;
+    } else {
+      uint8_t mac[6];
+      WiFi.macAddress(mac);
+      snprintf(out, maxLen, "%s-%02x%02x", MDNS_HOSTNAME, mac[4], mac[5]);
+      return;
+    }
+  }
+
+  if (suffix != nullptr) {
+    // Generate "goallight-<suffix>"
+    size_t j = 0;
+    const char* prefix = MDNS_HOSTNAME;
+    while (prefix[j] != '\0' && j < maxLen - 1) {
+      out[j] = prefix[j];
+      j++;
+    }
+    if (j < maxLen - 1) out[j++] = '-';
+
+    for (size_t i = 0; suffix[i] != '\0' && j < maxLen - 1; i++) {
+      char c = suffix[i];
+      if (isalnum(c)) {
+        out[j++] = tolower(c);
+      } else if (c == ' ' || c == '_' || c == '-') {
+        if (j > 0 && out[j - 1] != '-') {
+          out[j++] = '-';
+        }
+      }
+    }
+    if (j > 0 && out[j - 1] == '-') j--;
+    out[j] = '\0';
+    return;
+  }
+
+  // Generic custom name (e.g. "Man Cave" -> "man-cave")
   size_t j = 0;
   for (size_t i = 0; name[i] != '\0' && j < maxLen - 1; i++) {
     char c = name[i];
@@ -479,7 +533,7 @@ bool performCloudOta(const String &url) {
 void setupWebServer() {
 
   // Main page
-  server.on("/", HTTP_GET, []() {
+  server.on("/", []() {
     server.send_P(200, "text/html", INDEX_HTML);
   });
 
@@ -725,35 +779,101 @@ void setupWebServer() {
     server.send(400, "text/plain", "Bad Request");
   });
 
-  // REST API: Test Celebration (supports horn-only, light-only, or both, plus live effect override)
+  // REST API: Quick Levels Live Adjustment (Brightness & Volume with Chirp)
+  server.on("/api/quick-set", HTTP_POST, []() {
+    if (server.hasArg("plain")) {
+      String body = server.arg("plain");
+      int bPos = body.indexOf("\"brightness\":");
+      if (bPos >= 0) {
+        int b = body.substring(bPos + 13).toInt();
+        if (b >= 5 && b <= 255) {
+          config.brightness = (uint8_t)b;
+          leds.setBrightness(config.brightness);
+          prefs.putUChar("bright", config.brightness);
+        }
+      }
+
+      int vPos = body.indexOf("\"volume\":");
+      if (vPos >= 0) {
+        int v = body.substring(vPos + 9).toInt();
+        if (v >= 0 && v <= 5) {
+          config.volume_index = (uint8_t)v;
+          audio.setVolumeIndex(config.volume_index);
+          prefs.putUChar("volume", config.volume_index);
+        }
+      }
+
+      if (body.indexOf("\"chirp\":true") >= 0 && config.hw_speaker_enabled) {
+        audio.playChirp();
+      }
+
+      server.send(200, "application/json", "{\"success\":true}");
+      return;
+    }
+    server.send(400, "text/plain", "Bad Request");
+  });
+
+  // REST API: Test Celebration & Events (supports horn, light, display, event types, effect override, and stop)
   server.on("/api/test", HTTP_POST, []() {
     bool horn = true;
     bool light = true;
+    bool display = true;
+    String eventType = "goal";
     uint8_t effect = config.effect_style;
+
     if (server.hasArg("plain")) {
       String body = server.arg("plain");
       if (body.indexOf("\"horn\":false") >= 0) horn = false;
       if (body.indexOf("\"light\":false") >= 0) light = false;
+      if (body.indexOf("\"display\":false") >= 0) display = false;
+      int evPos = body.indexOf("\"event\":\"");
+      if (evPos >= 0) {
+        eventType = body.substring(evPos + 9, body.indexOf("\"", evPos + 9));
+      }
       int effPos = body.indexOf("\"effect\":");
       if (effPos >= 0) {
         effect = (uint8_t)body.substring(effPos + 9).toInt();
       }
     }
 
-    if (horn && config.hw_speaker_enabled) {
-      audio.play(TRACK_GOAL_HORN);
+    if (eventType == "stop") {
+      leds.returnToIdle();
+      audio.stop();
+      server.send(200, "application/json", "{\"success\":true,\"stopped\":true}");
+      return;
     }
-    if (light && config.hw_lights_enabled) {
-      LedMode mode = LED_BEACON_GOAL;
-      switch (effect) {
-        case 0: mode = LED_BEACON_GOAL; break;
-        case 1: mode = LED_STROBE_GOAL; break;
-        case 2: mode = LED_BREATHE_CELEBRATE; break;
-        case 3: mode = LED_SIREN_DUAL; break;
-        case 4: mode = LED_HEARTBEAT; break;
-        default: mode = LED_BEACON_GOAL; break;
+
+    if (eventType == "opponent") {
+      if (light && config.hw_lights_enabled) leds.setMode(LED_OPPONENT_GOAL, 4000);
+      if (horn && config.hw_speaker_enabled) audio.play(TRACK_PERIOD_HORN);
+    } else if (eventType == "powerplay") {
+      if (light && config.hw_lights_enabled) leds.setMode(LED_POWER_PLAY, 8000);
+      if (horn && config.hw_speaker_enabled) audio.play(TRACK_GAME_START);
+    } else if (eventType == "buzzer") {
+      if (light && config.hw_lights_enabled) leds.setMode(LED_STROBE_GOAL, 3000);
+      if (horn && config.hw_speaker_enabled) audio.play(TRACK_PERIOD_HORN);
+    } else if (eventType == "win") {
+      if (light && config.hw_lights_enabled) leds.setMode(LED_VICTORY_RAINBOW, 20000);
+      if (horn && config.hw_speaker_enabled) audio.play(TRACK_WIN_FANFARE);
+    } else if (eventType == "intermission") {
+      if (light && config.hw_lights_enabled) leds.setMode(LED_IDLE_BREATHE, 10000);
+      if (horn && config.hw_speaker_enabled) audio.play(TRACK_PERIOD_HORN);
+    } else { // default goal celebration
+      if (horn && config.hw_speaker_enabled) {
+        audio.play(TRACK_GOAL_HORN);
       }
-      leds.setMode(mode, config.celebration_sec * 1000UL);
+      if (light && config.hw_lights_enabled) {
+        LedMode mode = LED_BEACON_GOAL;
+        switch (effect) {
+          case 0: mode = LED_BEACON_GOAL; break;
+          case 1: mode = LED_STROBE_GOAL; break;
+          case 2: mode = LED_BREATHE_CELEBRATE; break;
+          case 3: mode = LED_SIREN_DUAL; break;
+          case 4: mode = LED_HEARTBEAT; break;
+          default: mode = LED_BEACON_GOAL; break;
+        }
+        leds.setMode(mode, config.celebration_sec * 1000UL);
+      }
     }
     server.send(200, "application/json", "{\"success\":true}");
   });
@@ -761,6 +881,7 @@ void setupWebServer() {
   // REST API: Live Game & System Status
   server.on("/api/status", HTTP_GET, []() {
     const GameStatus &gs = nhl.getStatus();
+    const UpcomingGame &up = nhl.getUpcoming();
     char hostSlug[33];
     generateHostname(config.device_name, hostSlug, sizeof(hostSlug));
     String json = "{";
@@ -782,6 +903,18 @@ void setupWebServer() {
     json += "\"period\":" + String(gs.period) + ",";
     json += "\"timeRemaining\":\"" + gs.timeRemaining + "\",";
     json += "\"inIntermission\":" + String(gs.inIntermission ? "true" : "false");
+    json += "},";
+    json += "\"upcoming\":{";
+    json += "\"valid\":" + String(up.valid ? "true" : "false") + ",";
+    json += "\"gameId\":" + String(up.gameId) + ",";
+    json += "\"date\":\"" + up.date + "\",";
+    json += "\"timeUTC\":\"" + up.timeUTC + "\",";
+    json += "\"opponent\":\"" + up.opponent + "\",";
+    json += "\"opponentName\":\"" + up.opponentName + "\",";
+    json += "\"isHome\":" + String(up.isHome ? "true" : "false") + ",";
+    json += "\"venue\":\"" + up.venue + "\",";
+    json += "\"broadcasts\":\"" + up.broadcasts + "\",";
+    json += "\"gameState\":\"" + up.gameState + "\"";
     json += "}}";
     server.send(200, "application/json", json);
   });
