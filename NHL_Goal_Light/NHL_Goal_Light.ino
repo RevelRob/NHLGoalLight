@@ -124,6 +124,16 @@ void loop() {
   // 4. Update LED animations (non-blocking)
   leds.update();
 
+  // Periodic Serial heartbeat so Serial Monitor confirms the device is running
+  static unsigned long lastHeartbeat = 0;
+  if (now - lastHeartbeat >= 3000) {
+    lastHeartbeat = now;
+    Serial.printf("🏒 [NHL Goal Light] Alive! Mode: %s | Free RAM: %u bytes | IP: %s\n",
+                  isApMode ? "AP (SSID: NHL-Goal-Light-Setup)" : "Station Mode",
+                  ESP.getFreeHeap(),
+                  isApMode ? "192.168.4.1" : WiFi.localIP().toString().c_str());
+  }
+
   // 5. If celebrating or in AP mode, skip live polling
   if (isApMode || leds.isCelebrating()) {
     return;
