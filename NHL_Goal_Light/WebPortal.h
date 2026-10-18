@@ -663,11 +663,32 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 
     btnCheckUpdate.onclick = () => {
       btnCheckUpdate.textContent = 'Checking...';
+
+      const checkPagesManifest = () => {
+        return fetch('https://revelrob.github.io/NHLGoalLight/manifest.json?t=' + Date.now())
+          .then(r => {
+            if (!r.ok) throw new Error('No manifest found');
+            return r.json();
+          })
+          .then(man => {
+            return {
+              tag_name: 'v' + man.version,
+              body: 'Latest release from NHL Goal Light update pipeline.',
+              html_url: 'https://revelrob.github.io/NHLGoalLight/',
+              assets: [{
+                name: 'firmware.bin',
+                browser_download_url: 'https://revelrob.github.io/NHLGoalLight/builds/firmware.bin'
+              }]
+            };
+          });
+      };
+
       fetch('https://api.github.com/repos/RevelRob/NHLGoalLight/releases/latest')
         .then(r => {
-          if (!r.ok) throw new Error('No releases found');
+          if (!r.ok) return checkPagesManifest();
           return r.json();
         })
+        .catch(() => checkPagesManifest())
         .then(rel => {
           btnCheckUpdate.textContent = '🔍 Check GitHub';
           const latestTag = rel.tag_name || rel.name;
@@ -697,6 +718,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
           updateInfo.innerHTML = `No releases published yet on GitHub. Check <a href="https://github.com/RevelRob/NHLGoalLight" target="_blank" style="color:#58a6ff;">RevelRob/NHLGoalLight</a>.`;
         });
     };
+
 
     otaFile.onchange = () => {
       btnOtaUpload.style.display = otaFile.files.length > 0 ? 'block' : 'none';
