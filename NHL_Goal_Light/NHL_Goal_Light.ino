@@ -39,6 +39,9 @@ unsigned long buttonLockoutUntil = 0;
 int pressCount = 0;
 unsigned long scheduledRestartTime = 0;
 
+// TV Broadcast Delay Celebration Queue
+unsigned long pendingGoalCelebrationTime = 0;
+
 // =====================================================
 // FORWARD DECLARATIONS
 // =====================================================
@@ -59,7 +62,7 @@ void setup() {
   delay(100);
 
   Serial.println("\n=================================");
-  Serial.println("🚨 NHL Goal Light Initializing");
+  Serial.println("🚨 NHL Goal Light Initialising");
   Serial.printf("📦 Firmware Version: %s\n", FIRMWARE_VERSION);
   Serial.println("=================================");
 
@@ -71,20 +74,20 @@ void setup() {
   pinMode(PIN_BUTTON, INPUT_PULLUP);
   pinMode(0, INPUT_PULLUP); // On-board BOOT button on ESP32-S3 Super Mini
 
-  // Load NVS config
+  // Load persistent configuration from NVS
   loadConfiguration();
 
-  // Initialize LED Engine
+  // Initialise LED Engine
   const TeamData* team = findTeam(config.primary_team);
   leds.begin();
-  leds.setBrightness(config.brightness);
+  leds.configure(config);
   leds.setTeam(team);
 
-  // Initialize Audio
+  // Initialise Audio
   audio.begin();
   audio.setVolumeIndex(config.volume_index);
 
-  // Initialize NHL Client
+  // Initialise NHL API Client
   nhl.setTeam(config.primary_team);
 
   // Check if either external button (GPIO 9) or on-board BOOT button (GPIO 0) is held during boot
@@ -143,6 +146,12 @@ void loop() {
                   isApMode ? "192.168.4.1" : WiFi.localIP().toString().c_str());
   }
 
+  // Check buffered TV broadcast delay celebration
+  if (pendingGoalCelebrationTime > 0 && now >= pendingGoalCelebrationTime) {
+    pendingGoalCelebrationTime = 0;
+    triggerGoalCelebration();
+  }
+
   // 5. If celebrating or in AP mode, skip live polling
   if (isApMode || leds.isCelebrating()) {
     return;
@@ -176,13 +185,20 @@ void loop() {
   bool preferredGoal = nhl.poll(opponentGoal, gameWin, periodStart);
 
   if (preferredGoal) {
-    triggerGoalCelebration();
+    if (config.broadcast_delay_sec == 0) {
+      triggerGoalCelebration();
+    } else {
+      pendingGoalCelebrationTime = now + (config.broadcast_delay_sec * 1000UL);
+      Serial.printf("[Event] Goal scored! Celebration held for %d sec (TV broadcast synchronisation)...\n", config.broadcast_delay_sec);
+    }
   } else if (opponentGoal && config.alert_opponent_goal) {
     triggerOpponentGoal();
   } else if (gameWin && config.alert_game_win) {
     triggerGameWin();
   } else if (periodStart && config.alert_period_buzzer) {
-    audio.play(TRACK_PERIOD_HORN);
+    if (config.hw_speaker_enabled) {
+      audio.play(TRACK_PERIOD_HORN);
+    }
   }
 }
 
@@ -191,21 +207,40 @@ void loop() {
 // =====================================================
 void triggerGoalCelebration() {
   Serial.println("[Event] GOAL CELEBRATION TRIGGERED!");
-  audio.play(TRACK_GOAL_HORN);
 
-  LedMode mode = (config.effect_style == 1) ? LED_STROBE_GOAL : LED_BEACON_GOAL;
-  leds.setMode(mode, config.celebration_sec * 1000UL);
+  if (config.hw_speaker_enabled) {
+    audio.play(TRACK_GOAL_HORN);
+  }
+
+  if (config.hw_lights_enabled) {
+    LedMode mode = LED_BEACON_GOAL;
+    switch (config.effect_style) {
+      case 0: mode = LED_BEACON_GOAL; break;
+      case 1: mode = LED_STROBE_GOAL; break;
+      case 2: mode = LED_BREATHE_CELEBRATE; break;
+      case 3: mode = LED_SIREN_DUAL; break;
+      case 4: mode = LED_HEARTBEAT; break;
+      default: mode = LED_BEACON_GOAL; break;
+    }
+    leds.setMode(mode, config.celebration_sec * 1000UL);
+  }
 }
 
 void triggerOpponentGoal() {
   Serial.println("[Event] Opponent Goal Alert.");
-  leds.setMode(LED_OPPONENT_GOAL, 3000);
+  if (config.hw_lights_enabled) {
+    leds.setMode(LED_OPPONENT_GOAL, 3000);
+  }
 }
 
 void triggerGameWin() {
   Serial.println("[Event] VICTORY CELEBRATION!");
-  audio.play(TRACK_WIN_FANFARE);
-  leds.setMode(LED_VICTORY_RAINBOW, 20000);
+  if (config.hw_speaker_enabled) {
+    audio.play(TRACK_WIN_FANFARE);
+  }
+  if (config.hw_lights_enabled) {
+    leds.setMode(LED_VICTORY_RAINBOW, 20000);
+  }
 }
 
 // =====================================================
@@ -251,12 +286,14 @@ void handleButton(unsigned long now) {
     buttonLockoutUntil = now + 300;
 
     if (count == 1) {
-      // Single press: cycle volume
-      uint8_t nextVol = (audio.getVolumeIndex() + 1) % 6;
-      audio.setVolumeIndex(nextVol);
-      config.volume_index = nextVol;
-      saveConfiguration();
-      Serial.printf("[Button] Single press: Volume index %d\n", nextVol);
+      // Single press: cycle volume (if speaker enabled)
+      if (config.hw_speaker_enabled) {
+        uint8_t nextVol = (audio.getVolumeIndex() + 1) % 6;
+        audio.setVolumeIndex(nextVol);
+        config.volume_index = nextVol;
+        saveConfiguration();
+        Serial.printf("[Button] Single press: Volume index %d\n", nextVol);
+      }
     } else if (count == 2) {
       // Double press: Test Goal Celebration
       Serial.println("[Button] Double press: Test Goal Celebration!");
@@ -278,7 +315,7 @@ void setupNetwork() {
   if (isApMode || strlen(config.wifi_ssid) == 0) {
     isApMode = true;
     Serial.println("[Network] Starting Access Point: " AP_SSID);
-    WiFi.mode(WIFI_AP_STA); // AP_STA allows background scanning while AP is active
+    WiFi.mode(WIFI_AP_STA);
     delay(50);
     WiFi.softAPConfig(apIP, apIP, netMsk);
     bool apSuccess = false;
@@ -292,8 +329,6 @@ void setupNetwork() {
     delay(100);
 
     dnsServer.start(DNS_PORT, "*", apIP);
-
-    // Pre-cache nearby Wi-Fi networks immediately
     WiFi.scanNetworks(true);
 
     leds.setMode(LED_AP_CONFIG);
@@ -301,7 +336,6 @@ void setupNetwork() {
     digitalWrite(PIN_STATUS_LED, LOW); // Blue LED ON solid in AP mode
 #endif
   } else {
-    // Both SoftAP and Station Mode: SoftAP remains available for phone connection while connecting to router
     Serial.printf("[Network] Starting AP '%s' & connecting to '%s'...\n", AP_SSID, config.wifi_ssid);
     WiFi.mode(WIFI_AP_STA);
     delay(50);
@@ -330,15 +364,18 @@ void setupNetwork() {
       Serial.print("[Network] IP Address: ");
       Serial.println(WiFi.localIP());
 
-      // Turn off SoftAP once connected so phone re-joins home Wi-Fi automatically
+      // Disable SoftAP once connected so client seamlessly rejoins home network
       WiFi.softAPdisconnect(true);
       WiFi.mode(WIFI_STA);
       isApMode = false;
 
       if (MDNS.begin(MDNS_HOSTNAME)) {
         Serial.println("[Network] mDNS responder started: http://" MDNS_HOSTNAME ".local");
+        if (strlen(config.device_name) > 0) {
+          MDNS.setInstanceName(config.device_name);
+        }
       }
-      leds.setMode(LED_IDLE_BREATHE);
+      leds.returnToIdle();
 #ifdef PIN_STATUS_LED
       digitalWrite(PIN_STATUS_LED, HIGH); // Blue LED OFF when connected online
 #endif
@@ -450,7 +487,6 @@ void setupWebServer() {
     server.send_P(200, "application/manifest+json", PWA_MANIFEST_JSON);
   });
 
-
   // REST API: Wi-Fi Scanner (GET)
   server.on("/api/scan", HTTP_GET, []() {
     int16_t scanStatus = WiFi.scanComplete();
@@ -469,7 +505,7 @@ void setupWebServer() {
     int added = 0;
     for (int i = 0; i < count; ++i) {
       String ssid = WiFi.SSID(i);
-      if (ssid.length() == 0) continue; // Skip hidden/blank SSIDs
+      if (ssid.length() == 0) continue;
 
       if (added > 0) json += ",";
       ssid.replace("\\", "\\\\");
@@ -494,7 +530,15 @@ void setupWebServer() {
   // REST API: Config GET
   server.on("/api/config", HTTP_GET, []() {
     String json = "{";
+    json += "\"deviceName\":\"" + String(config.device_name) + "\",";
     json += "\"team\":\"" + String(config.primary_team) + "\",";
+    json += "\"hwLights\":" + String(config.hw_lights_enabled ? "true" : "false") + ",";
+    json += "\"hwSpeaker\":" + String(config.hw_speaker_enabled ? "true" : "false") + ",";
+    json += "\"hwDisplay\":" + String(config.hw_display_enabled ? "true" : "false") + ",";
+    json += "\"numLeds\":" + String(config.num_leds) + ",";
+    json += "\"ledLayout\":" + String(config.led_layout) + ",";
+    json += "\"ledReverse\":" + String(config.led_reverse ? "true" : "false") + ",";
+    json += "\"idleEffect\":" + String(config.idle_effect) + ",";
     json += "\"brightness\":" + String(config.brightness) + ",";
     json += "\"volume\":" + String(config.volume_index) + ",";
     json += "\"hornDuration\":" + String(config.celebration_sec) + ",";
@@ -502,7 +546,9 @@ void setupWebServer() {
     json += "\"alertOpponent\":" + String(config.alert_opponent_goal ? "true" : "false") + ",";
     json += "\"alertPowerPlay\":" + String(config.alert_power_play ? "true" : "false") + ",";
     json += "\"alertBuzzer\":" + String(config.alert_period_buzzer ? "true" : "false") + ",";
+    json += "\"alertIntermission\":" + String(config.alert_intermission ? "true" : "false") + ",";
     json += "\"alertWin\":" + String(config.alert_game_win ? "true" : "false") + ",";
+    json += "\"broadcastDelay\":" + String(config.broadcast_delay_sec) + ",";
     json += "\"ssid\":\"" + String(config.wifi_ssid) + "\",";
     json += "\"apPass\":\"" + String(config.ap_password) + "\"";
     json += "}";
@@ -513,10 +559,19 @@ void setupWebServer() {
   server.on("/api/config", HTTP_POST, []() {
     if (server.hasArg("plain")) {
       String body = server.arg("plain");
-
       bool wifiConfigured = false;
 
-      // Extract fields simply without large JSON parser overhead
+      // Device Name
+      int dPos = body.indexOf("\"deviceName\":\"");
+      if (dPos >= 0) {
+        String dn = body.substring(dPos + 14, body.indexOf("\"", dPos + 14));
+        dn.trim();
+        if (dn.length() > 0) {
+          strncpy(config.device_name, dn.c_str(), sizeof(config.device_name));
+        }
+      }
+
+      // Favourite Team
       int teamPos = body.indexOf("\"team\":\"");
       if (teamPos >= 0) {
         String t = body.substring(teamPos + 8, body.indexOf("\"", teamPos + 8));
@@ -526,6 +581,38 @@ void setupWebServer() {
         nhl.setTeam(config.primary_team);
       }
 
+      // Hardware Flags
+      if (body.indexOf("\"hwLights\":") >= 0) {
+        config.hw_lights_enabled = (body.indexOf("\"hwLights\":true") >= 0);
+      }
+      if (body.indexOf("\"hwSpeaker\":") >= 0) {
+        config.hw_speaker_enabled = (body.indexOf("\"hwSpeaker\":true") >= 0);
+      }
+      if (body.indexOf("\"hwDisplay\":") >= 0) {
+        config.hw_display_enabled = (body.indexOf("\"hwDisplay\":true") >= 0);
+      }
+
+      // LED Geometry
+      int nlPos = body.indexOf("\"numLeds\":");
+      if (nlPos >= 0) {
+        config.num_leds = (uint16_t)body.substring(nlPos + 10).toInt();
+      }
+
+      int layPos = body.indexOf("\"ledLayout\":");
+      if (layPos >= 0) {
+        config.led_layout = (uint8_t)body.substring(layPos + 12).toInt();
+      }
+
+      if (body.indexOf("\"ledReverse\":") >= 0) {
+        config.led_reverse = (body.indexOf("\"ledReverse\":true") >= 0);
+      }
+
+      int iePos = body.indexOf("\"idleEffect\":");
+      if (iePos >= 0) {
+        config.idle_effect = (uint8_t)body.substring(iePos + 13).toInt();
+      }
+
+      // Brightness & Volume
       int bPos = body.indexOf("\"brightness\":");
       if (bPos >= 0) {
         config.brightness = body.substring(bPos + 13).toInt();
@@ -548,11 +635,30 @@ void setupWebServer() {
         config.effect_style = body.substring(ePos + 14).toInt();
       }
 
-      config.alert_opponent_goal = (body.indexOf("\"alertOpponent\":true") >= 0);
-      config.alert_power_play = (body.indexOf("\"alertPowerPlay\":true") >= 0);
-      config.alert_period_buzzer = (body.indexOf("\"alertBuzzer\":true") >= 0);
-      config.alert_game_win = (body.indexOf("\"alertWin\":true") >= 0);
+      // Event Toggles
+      if (body.indexOf("\"alertOpponent\":") >= 0) {
+        config.alert_opponent_goal = (body.indexOf("\"alertOpponent\":true") >= 0);
+      }
+      if (body.indexOf("\"alertPowerPlay\":") >= 0) {
+        config.alert_power_play = (body.indexOf("\"alertPowerPlay\":true") >= 0);
+      }
+      if (body.indexOf("\"alertBuzzer\":") >= 0) {
+        config.alert_period_buzzer = (body.indexOf("\"alertBuzzer\":true") >= 0);
+      }
+      if (body.indexOf("\"alertIntermission\":") >= 0) {
+        config.alert_intermission = (body.indexOf("\"alertIntermission\":true") >= 0);
+      }
+      if (body.indexOf("\"alertWin\":") >= 0) {
+        config.alert_game_win = (body.indexOf("\"alertWin\":true") >= 0);
+      }
 
+      // TV Broadcast Delay
+      int bdPos = body.indexOf("\"broadcastDelay\":");
+      if (bdPos >= 0) {
+        config.broadcast_delay_sec = (uint16_t)body.substring(bdPos + 17).toInt();
+      }
+
+      // Wi-Fi Credentials
       int sPos = body.indexOf("\"ssid\":\"");
       if (sPos >= 0) {
         String s = body.substring(sPos + 8, body.indexOf("\"", sPos + 8));
@@ -584,6 +690,8 @@ void setupWebServer() {
         strncpy(config.ap_password, ap.c_str(), sizeof(config.ap_password));
       }
 
+      // Apply runtime configuration
+      leds.configure(config);
       saveConfiguration();
 
       bool shouldRestart = (isApMode && strlen(config.wifi_ssid) > 0) || wifiConfigured;
@@ -599,28 +707,54 @@ void setupWebServer() {
     server.send(400, "text/plain", "Bad Request");
   });
 
-  // REST API: Test
+  // REST API: Test Celebration (supports horn-only, light-only, or both)
   server.on("/api/test", HTTP_POST, []() {
-    triggerGoalCelebration();
-    server.send(200, "text/plain", "Test Triggered");
+    bool horn = true;
+    bool light = true;
+    if (server.hasArg("plain")) {
+      String body = server.arg("plain");
+      if (body.indexOf("\"horn\":false") >= 0) horn = false;
+      if (body.indexOf("\"light\":false") >= 0) light = false;
+    }
+
+    if (horn && config.hw_speaker_enabled) {
+      audio.play(TRACK_GOAL_HORN);
+    }
+    if (light && config.hw_lights_enabled) {
+      LedMode mode = LED_BEACON_GOAL;
+      switch (config.effect_style) {
+        case 0: mode = LED_BEACON_GOAL; break;
+        case 1: mode = LED_STROBE_GOAL; break;
+        case 2: mode = LED_BREATHE_CELEBRATE; break;
+        case 3: mode = LED_SIREN_DUAL; break;
+        case 4: mode = LED_HEARTBEAT; break;
+        default: mode = LED_BEACON_GOAL; break;
+      }
+      leds.setMode(mode, config.celebration_sec * 1000UL);
+    }
+    server.send(200, "application/json", "{\"success\":true}");
   });
 
-  // REST API: Status
+  // REST API: Live Game & System Status
   server.on("/api/status", HTTP_GET, []() {
     const GameStatus &gs = nhl.getStatus();
     String json = "{";
     json += "\"system\":{";
     json += "\"connected\":" + String(WiFi.status() == WL_CONNECTED ? "true" : "false") + ",";
+    json += "\"deviceName\":\"" + String(config.device_name) + "\",";
     json += "\"team\":\"" + String(config.primary_team) + "\",";
     json += "\"freeHeap\":" + String(ESP.getFreeHeap()) + ",";
     json += "\"version\":\"" + String(FIRMWARE_VERSION) + "\"";
     json += "},";
     json += "\"game\":{";
-    json += "\"state\":\"" + String(gs.state == STATE_LIVE ? "LIVE" : (gs.state == STATE_FINAL ? "FINAL" : "IDLE")) + "\",";
+    json += "\"state\":\"" + String(gs.state == STATE_LIVE ? "LIVE" : (gs.state == STATE_FINAL ? "FINAL" : (gs.state == STATE_PREGAME ? "PREGAME" : "IDLE"))) + "\",";
     json += "\"homeAbbrev\":\"" + gs.homeAbbrev + "\",";
     json += "\"awayAbbrev\":\"" + gs.awayAbbrev + "\",";
     json += "\"homeScore\":" + String(gs.homeScore) + ",";
-    json += "\"awayScore\":" + String(gs.awayScore);
+    json += "\"awayScore\":" + String(gs.awayScore) + ",";
+    json += "\"period\":" + String(gs.period) + ",";
+    json += "\"timeRemaining\":\"" + gs.timeRemaining + "\",";
+    json += "\"inIntermission\":" + String(gs.inIntermission ? "true" : "false");
     json += "}}";
     server.send(200, "application/json", json);
   });
@@ -672,7 +806,6 @@ void setupWebServer() {
 
   // Captive portal fallback
   server.onNotFound([]() {
-
     server.sendHeader("Location", "/", true);
     server.send(302, "text/plain", "");
   });
@@ -688,24 +821,39 @@ void loadConfiguration() {
   initDefaultConfig(config);
   prefs.begin("goallight", false);
 
+  String devName = prefs.getString("dev_name", "NHL Goal Light");
   String ssid = prefs.getString("ssid", "");
   String pass = prefs.getString("pass", "");
   String apPass = prefs.getString("ap_pass", "");
-  String team = prefs.getString("team", "NYR");
+  String team = prefs.getString("team", "TOR");
 
+  if (devName.length() > 0) strncpy(config.device_name, devName.c_str(), sizeof(config.device_name));
   if (ssid.length() > 0) strncpy(config.wifi_ssid, ssid.c_str(), sizeof(config.wifi_ssid));
   if (pass.length() > 0) strncpy(config.wifi_pass, pass.c_str(), sizeof(config.wifi_pass));
   if (apPass.length() > 0) strncpy(config.ap_password, apPass.c_str(), sizeof(config.ap_password));
   if (team.length() > 0) strncpy(config.primary_team, team.c_str(), sizeof(config.primary_team));
 
+  config.hw_lights_enabled = prefs.getBool("hw_light", true);
+  config.hw_speaker_enabled = prefs.getBool("hw_audio", true);
+  config.hw_display_enabled = prefs.getBool("hw_disp", false);
+
+  config.num_leds = prefs.getUShort("n_leds", NUM_LEDS_DEFAULT);
+  config.led_layout = prefs.getUChar("led_lay", 0);
+  config.led_reverse = prefs.getBool("led_rev", false);
+  config.idle_effect = prefs.getUChar("idle_eff", 1);
+
   config.brightness = prefs.getUChar("bright", DEFAULT_BRIGHTNESS);
   config.volume_index = prefs.getUChar("vol", DEFAULT_VOLUME_IDX);
   config.celebration_sec = prefs.getUChar("dur", DEFAULT_HORN_SEC);
   config.effect_style = prefs.getUChar("effect", 0);
+
   config.alert_opponent_goal = prefs.getBool("opp", false);
   config.alert_power_play = prefs.getBool("pp", true);
   config.alert_period_buzzer = prefs.getBool("buzzer", true);
+  config.alert_intermission = prefs.getBool("interm", true);
   config.alert_game_win = prefs.getBool("win", true);
+
+  config.broadcast_delay_sec = prefs.getUShort("b_delay", 0);
 
   prefs.end();
   Serial.println("[Config] Settings loaded from NVS flash.");
@@ -713,18 +861,35 @@ void loadConfiguration() {
 
 void saveConfiguration() {
   prefs.begin("goallight", false);
+
+  prefs.putString("dev_name", config.device_name);
   prefs.putString("ssid", config.wifi_ssid);
   prefs.putString("pass", config.wifi_pass);
   prefs.putString("ap_pass", config.ap_password);
   prefs.putString("team", config.primary_team);
+
+  prefs.putBool("hw_light", config.hw_lights_enabled);
+  prefs.putBool("hw_audio", config.hw_speaker_enabled);
+  prefs.putBool("hw_disp", config.hw_display_enabled);
+
+  prefs.putUShort("n_leds", config.num_leds);
+  prefs.putUChar("led_lay", config.led_layout);
+  prefs.putBool("led_rev", config.led_reverse);
+  prefs.putUChar("idle_eff", config.idle_effect);
+
   prefs.putUChar("bright", config.brightness);
   prefs.putUChar("vol", config.volume_index);
   prefs.putUChar("dur", config.celebration_sec);
   prefs.putUChar("effect", config.effect_style);
+
   prefs.putBool("opp", config.alert_opponent_goal);
   prefs.putBool("pp", config.alert_power_play);
   prefs.putBool("buzzer", config.alert_period_buzzer);
+  prefs.putBool("interm", config.alert_intermission);
   prefs.putBool("win", config.alert_game_win);
+
+  prefs.putUShort("b_delay", config.broadcast_delay_sec);
+
   prefs.end();
   Serial.println("[Config] Settings saved to NVS flash.");
 }

@@ -20,8 +20,6 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-precomposed.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-  <link rel="apple-touch-icon-precomposed" sizes="180x180" href="/apple-touch-icon-precomposed.png">
-
 
   <!-- Android Chrome / PWA Standalone -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -30,11 +28,13 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/png" sizes="192x192" href="/icon.png">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%23111' stroke='%23333' stroke-width='4'/%3E%3Ccircle cx='50' cy='50' r='38' fill='%23d90429'/%3E%3Cpath d='M25 50h50M50 25v50' stroke='%23fff' stroke-width='8' stroke-linecap='round'/%3E%3Ccircle cx='50' cy='50' r='18' fill='%23fff'/%3E%3Ccircle cx='50' cy='50' r='10' fill='%23d90429'/%3E%3C/svg%3E">
+
   <style>
     :root {
       --bg: #0d1117;
-      --card-bg: rgba(22, 27, 34, 0.85);
-      --border: rgba(255, 255, 255, 0.1);
+      --card-bg: rgba(22, 27, 34, 0.88);
+      --card-inner: #161b22;
+      --border: rgba(255, 255, 255, 0.12);
       --text: #f0f6fc;
       --text-muted: #8b949e;
       --accent: #e63946;
@@ -42,32 +42,35 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       --btn-bg: #21262d;
       --btn-hover: #30363d;
       --success: #2ea043;
+      --gold: #d4a373;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       background: var(--bg);
       color: var(--text);
       display: flex;
       justify-content: center;
-      padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+      padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(84px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
       min-height: 100vh;
       -webkit-tap-highlight-color: transparent;
       user-select: none;
     }
     .container {
       width: 100%;
-      max-width: 480px;
+      max-width: 520px;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 14px;
     }
+
+    /* Header */
     .header {
       text-align: center;
-      padding: 12px 0;
+      padding: 6px 0 2px 0;
     }
     .header h1 {
-      font-size: 1.6rem;
+      font-size: 1.5rem;
       font-weight: 800;
       letter-spacing: -0.5px;
       display: flex;
@@ -79,31 +82,85 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       display: inline-block;
       font-size: 0.75rem;
       font-weight: 600;
-      padding: 3px 8px;
+      padding: 4px 10px;
       border-radius: 12px;
       background: var(--border);
       color: var(--text-muted);
       margin-top: 6px;
+      transition: all 0.3s ease;
     }
-    .badge.live { background: #e63946; color: #fff; }
+    .badge.live { background: #e63946; color: #fff; box-shadow: 0 0 12px var(--accent-glow); }
+
+    /* Navigation Bar */
+    .nav-bar {
+      display: flex;
+      background: var(--card-inner);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 4px;
+      gap: 4px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+      position: sticky;
+      top: max(8px, env(safe-area-inset-top));
+      z-index: 100;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    .nav-tab {
+      flex: 1;
+      padding: 9px 4px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-align: center;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      border-radius: 10px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      transition: all 0.2s ease;
+    }
+    .nav-tab .tab-icon { font-size: 1.05rem; }
+    .nav-tab.active {
+      background: var(--btn-bg);
+      color: var(--text);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    /* Tab Page Container */
+    .tab-page {
+      display: none;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .tab-page.active {
+      display: flex;
+    }
+
+    /* Cards */
     .card {
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 16px;
       padding: 18px;
       backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
       box-shadow: 0 8px 24px rgba(0,0,0,0.3);
     }
     .card h2 {
-      font-size: 1rem;
-      font-weight: 600;
+      font-size: 0.92rem;
+      font-weight: 700;
       margin-bottom: 14px;
       color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.8px;
       display: flex;
       align-items: center;
-      gap: 6px;
+      justify-content: space-between;
     }
     .form-group {
       margin-bottom: 14px;
@@ -113,20 +170,29 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       display: flex;
       justify-content: space-between;
       font-size: 0.85rem;
-      font-weight: 500;
+      font-weight: 600;
       margin-bottom: 6px;
     }
-    select, input[type="text"], input[type="password"] {
+    .helper-text {
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      margin-top: 5px;
+      line-height: 1.35;
+    }
+
+    select, input[type="text"], input[type="password"], input[type="number"] {
       width: 100%;
-      background: #161b22;
+      background: #11141a;
       border: 1px solid var(--border);
       color: var(--text);
       padding: 10px 12px;
       border-radius: 8px;
-      font-size: 0.95rem;
+      font-size: 0.92rem;
       outline: none;
+      transition: border-color 0.2s;
     }
     select:focus, input:focus { border-color: var(--accent); }
+
     .slider-container {
       display: flex;
       align-items: center;
@@ -136,7 +202,9 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       flex: 1;
       accent-color: var(--accent);
       cursor: pointer;
+      height: 6px;
     }
+
     .btn-row {
       display: flex;
       gap: 10px;
@@ -148,182 +216,608 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       border: 1px solid var(--border);
       background: var(--btn-bg);
       color: var(--text);
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
     button:hover { background: var(--btn-hover); }
     button.primary {
       background: var(--accent);
       border-color: transparent;
       color: #fff;
+      font-weight: 700;
     }
     button.primary:hover { opacity: 0.9; }
+
+    /* Checkbox & Switch Rows */
     .checkbox-row {
       display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 10px;
-      font-size: 0.9rem;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+      font-size: 0.88rem;
       cursor: pointer;
+      padding: 8px 10px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.04);
+      transition: background 0.2s;
     }
+    .checkbox-row:last-child { margin-bottom: 0; }
+    .checkbox-row:hover { background: rgba(255,255,255,0.06); }
     .checkbox-row input {
       accent-color: var(--accent);
       width: 18px;
       height: 18px;
+      margin-top: 2px;
+      flex: none;
     }
-    .status-toast {
-      padding: 10px;
-      border-radius: 8px;
-      font-size: 0.85rem;
+    .chk-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .chk-title { font-weight: 600; }
+    .chk-desc { font-size: 0.75rem; color: var(--text-muted); line-height: 1.3; }
+
+    /* Live Scoreboard Match Card */
+    .score-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(0,0,0,0.3));
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px 8px;
+      margin-bottom: 8px;
       text-align: center;
+    }
+    .team-box {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .team-abbrev {
+      font-size: 1.25rem;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+    }
+    .team-score {
+      font-size: 2.2rem;
+      font-weight: 900;
+      line-height: 1;
+      color: var(--text);
+    }
+    .score-vs {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .game-period-pill {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 8px;
+      background: var(--btn-bg);
+      border: 1px solid var(--border);
+    }
+
+    /* Preset Pill Buttons */
+    .preset-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .preset-btn {
+      flex: 1;
+      min-width: 90px;
+      padding: 7px 10px;
+      font-size: 0.76rem;
+      background: #11141a;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      text-align: center;
+    }
+    .preset-btn:hover { background: var(--btn-hover); }
+
+    /* Virtual LED Ring Preview */
+    .ring-preview-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px 0;
+      background: #11141a;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      margin-top: 10px;
+    }
+    #ringCanvas {
+      width: 160px;
+      height: 160px;
+    }
+
+    /* Fixed Bottom Save Bar */
+    .fixed-save-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background: rgba(13, 17, 23, 0.94);
+      border-top: 1px solid var(--border);
+      padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+      display: flex;
+      justify-content: center;
+      z-index: 99;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    .fixed-save-bar .save-inner {
+      width: 100%;
+      max-width: 520px;
+      display: flex;
+      gap: 10px;
+    }
+
+    /* Hidden hardware elements */
+    [data-hw-hidden="true"] {
+      display: none !important;
+    }
+
+    /* Modal Overlay */
+    .modal-overlay {
       display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(13,17,23,0.95);
+      z-index: 9999;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .modal-content {
+      background: #161b22;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 400px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 12px 36px rgba(0,0,0,0.6);
     }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1>🚨 NHL Goal Light</h1>
+      <h1 id="titleDeviceName">🚨 NHL Goal Light</h1>
       <div id="statusBadge" class="badge">Connecting...</div>
     </div>
 
-    <!-- Favorite Team -->
-    <div class="card">
-      <h2>⭐ Favorite Team</h2>
-      <div class="form-group">
-        <label for="teamSelect">Selected Team</label>
-        <select id="teamSelect"></select>
-      </div>
-    </div>
+    <!-- 5-Tab Navigation Bar -->
+    <nav class="nav-bar">
+      <button type="button" class="nav-tab active" data-tab="live">
+        <span class="tab-icon">🚨</span>
+        <span>Live</span>
+      </button>
+      <button type="button" class="nav-tab" data-tab="lights" data-hw="lights">
+        <span class="tab-icon">💡</span>
+        <span>Lights</span>
+      </button>
+      <button type="button" class="nav-tab" data-tab="events">
+        <span class="tab-icon">⚡</span>
+        <span>Events</span>
+      </button>
+      <button type="button" class="nav-tab" data-tab="sync">
+        <span class="tab-icon">📺</span>
+        <span>Sync</span>
+      </button>
+      <button type="button" class="nav-tab" data-tab="system">
+        <span class="tab-icon">⚙️</span>
+        <span>System</span>
+      </button>
+    </nav>
 
-    <!-- Lighting Controls -->
-    <div class="card">
-      <h2>💡 Lighting Controls</h2>
-      <div class="form-group">
-        <label>Brightness: <span id="brightVal">70%</span></label>
-        <div class="slider-container">
-          <input type="range" id="brightSlider" min="10" max="255" value="180">
-        </div>
-      </div>
-      <div class="form-group">
-        <label for="effectSelect">Celebration Effect</label>
-        <select id="effectSelect">
-          <option value="0">Rotating Halogen Beacon</option>
-          <option value="1">High-Speed Arena Strobe</option>
-          <option value="2">Team Color Breath</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Horn Duration: <span id="hornVal">12s</span></label>
-        <div class="slider-container">
-          <input type="range" id="hornSlider" min="5" max="30" value="12">
-        </div>
-      </div>
-    </div>
-
-    <!-- Sound Controls -->
-    <div class="card">
-      <h2>🔊 Sound Controls</h2>
-      <div class="form-group">
-        <label>Volume: <span id="volVal">Level 3</span></label>
-        <div class="slider-container">
-          <input type="range" id="volSlider" min="0" max="5" value="3">
-        </div>
-      </div>
-      <div class="btn-row">
-        <button id="btnTestHorn" class="primary">🚨 Test Goal Horn</button>
-        <button id="btnTestLight">💡 Test Light Only</button>
-      </div>
-    </div>
-
-    <!-- Event Toggles -->
-    <div class="card">
-      <h2>⚙️ Event Alerts</h2>
-      <label class="checkbox-row">
-        <input type="checkbox" id="chkOpponent">
-        <span>Alert on Opponent Goals</span>
-      </label>
-      <label class="checkbox-row">
-        <input type="checkbox" id="chkPowerPlay" checked>
-        <span>Alert on Power Play Awarded</span>
-      </label>
-      <label class="checkbox-row">
-        <input type="checkbox" id="chkBuzzer" checked>
-        <span>Period Start & End Buzzers</span>
-      </label>
-      <label class="checkbox-row">
-        <input type="checkbox" id="chkWin" checked>
-        <span>Game Win Victory Fanfare</span>
-      </label>
-    </div>
-
-    <!-- Wi-Fi Setup -->
-    <div class="card" id="wifiCard">
-      <h2>📶 Wi-Fi Settings</h2>
-      <div class="form-group">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-          <label style="margin:0;">Select Nearby Network</label>
-          <button type="button" id="btnRescan" style="flex:none; padding:4px 10px; font-size:0.75rem; border-radius:6px; background:var(--btn-bg); border:1px solid var(--border); color:var(--text); cursor:pointer;">🔄 Rescan</button>
-        </div>
-        <select id="wifiSelect">
-          <option value="" disabled selected>🔍 Scanning for Wi-Fi networks...</option>
-        </select>
-      </div>
-
-      <div class="form-group" id="manualSsidGroup" style="display:none;">
-        <label for="wifiSsid">Wi-Fi Network Name (SSID)</label>
-        <input type="text" id="wifiSsid" placeholder="Enter Wi-Fi SSID" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
-      </div>
-
-      <div class="form-group">
-        <label for="wifiPass">Wi-Fi Password</label>
-        <div style="position:relative; display:flex; align-items:center;">
-          <input type="password" id="wifiPass" placeholder="Enter Wi-Fi Password" autocomplete="new-password" style="padding-right:42px;">
-          <button type="button" id="btnTogglePass" style="position:absolute; right:4px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1.1rem; padding:4px 8px; flex:none;">👁️</button>
-        </div>
-      </div>
-
-      <div class="form-group" style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
-        <label for="apPass">Goal Light Hotspot Password (Optional)</label>
-        <div style="position:relative; display:flex; align-items:center;">
-          <input type="password" id="apPass" placeholder="Leave blank for open network (min 8 chars)" autocomplete="new-password" style="padding-right:42px;">
-          <button type="button" id="btnToggleApPass" style="position:absolute; right:4px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1.1rem; padding:4px 8px; flex:none;">👁️</button>
-        </div>
-        <span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-top:4px;">Security password for <strong>NHL-Goal-Light-Setup</strong> Wi-Fi. Leave blank for open access.</span>
-      </div>
-    </div>
-
-    <!-- Firmware & Updates -->
-    <div class="card">
-      <h2>🔄 Firmware & Updates</h2>
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <span style="font-size:0.85rem; color:var(--text-muted)">Current Version: <strong id="curVer" style="color:var(--text)">v1.0.2.1</strong></span>
-        <button id="btnCheckUpdate" style="padding:6px 12px; font-size:0.8rem; background:var(--btn-bg); border:1px solid var(--border); color:var(--text); border-radius:8px; cursor:pointer;">🔍 Check GitHub</button>
-      </div>
-      <div id="updateInfo" style="display:none; padding:10px; border-radius:8px; background:rgba(46,160,67,0.15); border:1px solid var(--success); margin-bottom:12px; font-size:0.82rem; line-height:1.4;"></div>
+    <!-- ===================================================== -->
+    <!-- TAB 1: LIVE (DASHBOARD & PRIMARY CONTROLS)            -->
+    <!-- ===================================================== -->
+    <div id="tab-live" class="tab-page active">
       
-      <div class="form-group" style="margin-bottom:8px;">
-        <label for="otaFile">Manual OTA Firmware Upload (.bin)</label>
-        <input type="file" id="otaFile" accept=".bin" style="font-size:0.8rem; padding:8px 0; color:var(--text-muted);">
-      </div>
-      <button id="btnOtaUpload" style="width:100%; padding:10px; background:#1f6feb; border:none; border-radius:8px; color:white; font-weight:600; cursor:pointer; display:none;">⚡ Install Firmware Update</button>
-      <div id="otaProgress" style="display:none; margin-top:8px;">
-        <div style="background:var(--border); border-radius:6px; height:12px; overflow:hidden;">
-          <div id="otaBar" style="background:#1f6feb; height:100%; width:0%; transition:width 0.2s;"></div>
+      <!-- Live Game Matchup Card -->
+      <div class="card">
+        <h2>🏒 Game Status</h2>
+        <div class="score-card">
+          <div class="team-box">
+            <span class="team-abbrev" id="liveAwayTeam">---</span>
+            <span class="team-score" id="liveAwayScore">-</span>
+          </div>
+          <div class="score-vs">
+            <span id="liveGameClock" class="game-period-pill">No Game</span>
+            <span id="liveIntermissionNote" style="font-size:0.7rem; color:var(--accent); font-weight:700; display:none;">INTERMISSION</span>
+          </div>
+          <div class="team-box">
+            <span class="team-abbrev" id="liveHomeTeam">---</span>
+            <span class="team-score" id="liveHomeScore">-</span>
+          </div>
         </div>
-        <div id="otaText" style="font-size:0.75rem; color:var(--text-muted); text-align:center; margin-top:4px;">Uploading: 0%</div>
+        <div class="helper-text" id="liveStatusSubtext" style="text-align:center;">Synchronised with NHL live scores.</div>
+      </div>
+
+      <!-- Favourite Team Selector -->
+      <div class="card">
+        <h2>⭐ Favourite Team</h2>
+        <div class="form-group">
+          <label for="teamSelect">Tracked NHL Franchise</label>
+          <select id="teamSelect"></select>
+          <div class="helper-text">Goal celebrations and ambient lighting automatically adapt to this team's official colours.</div>
+        </div>
+      </div>
+
+      <!-- Quick Controls -->
+      <div class="card">
+        <h2>🎛️ Quick Levels</h2>
+        
+        <!-- Brightness Slider (Guarded by Lights Hardware) -->
+        <div class="form-group" data-hw="lights">
+          <label>Light Brightness: <span id="brightVal">70%</span></label>
+          <div class="slider-container">
+            <input type="range" id="brightSlider" min="10" max="255" value="180">
+          </div>
+        </div>
+
+        <!-- Volume Slider (Guarded by Speaker Hardware) -->
+        <div class="form-group" data-hw="speaker">
+          <label>Speaker Volume: <span id="volVal">Level 3</span></label>
+          <div class="slider-container">
+            <input type="range" id="volSlider" min="0" max="5" value="3">
+          </div>
+        </div>
+
+        <!-- Quick Celebration Tests -->
+        <div class="btn-row" style="margin-top:14px;">
+          <button type="button" id="btnTestCelebration" class="primary">🚨 Test Goal Celebration</button>
+        </div>
+        <div class="btn-row" style="margin-top:8px;">
+          <button type="button" id="btnTestLightsOnly" data-hw="lights">💡 Lights Only</button>
+          <button type="button" id="btnTestHornOnly" data-hw="speaker">🔊 Horn Only</button>
+        </div>
       </div>
     </div>
 
-    <button type="button" id="btnSave" class="primary" style="padding: 16px; font-size: 1rem;">💾 Save & Apply Settings</button>
-    <div id="statusToast" class="status-toast"></div>
+    <!-- ===================================================== -->
+    <!-- TAB 2: LIGHTS (LED GEOMETRY & CELEBRATION FX)         -->
+    <!-- ===================================================== -->
+    <div id="tab-lights" class="tab-page">
+      
+      <!-- LED Hardware & Geometry -->
+      <div class="card">
+        <h2>⭕ Hardware & Geometry</h2>
+        <div class="form-group">
+          <label for="ledPixels">Connected Pixel Count</label>
+          <input type="number" id="ledPixels" min="4" max="300" value="16">
+          <div class="helper-text">Number of addressable WS2812B RGB LEDs attached (e.g. 16 or 24 for NeoPixel rings).</div>
+        </div>
+        <div class="form-group">
+          <label for="ledLayout">Arrangement Geometry</label>
+          <select id="ledLayout">
+            <option value="0">⭕ Single Ring (16/24 NeoPixel Ring)</option>
+            <option value="1">🌪️ Spiral Wrap Strip (Cylindrical Beacon)</option>
+            <option value="2">⏸️ Parallel Columns</option>
+            <option value="3">📏 Linear Strip / Bar</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="checkbox-row" style="margin:0;">
+            <input type="checkbox" id="chkLedReverse">
+            <div class="chk-text">
+              <span class="chk-title">Invert Rotation Direction</span>
+              <span class="chk-desc">Reverses clockwise vs counter-clockwise beacon sweep.</span>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Celebration Lighting Effects -->
+      <div class="card">
+        <h2>✨ Goal Celebration Effects</h2>
+        <div class="form-group">
+          <label for="effectSelect">Celebration Light Pattern</label>
+          <select id="effectSelect">
+            <option value="0">🚨 Rotating Halogen Beacon (Classic Revolving Reflector)</option>
+            <option value="1">⚡ High-Speed Arena Strobe (Stadium Flash)</option>
+            <option value="2">🌊 Team Colour Breathe (Pulsing Unison Glow)</option>
+            <option value="3">🚔 Dual Siren Flasher (Emergency Wig-Wag)</option>
+            <option value="4">❤️ Heartbeat Pulse (Urgent Goal Surge)</option>
+          </select>
+          <div class="helper-text">Each effect generates distinct, high-impact stadium celebrations tailored to your ring.</div>
+        </div>
+        <div class="form-group">
+          <label>Celebration Duration: <span id="hornVal">12s</span></label>
+          <div class="slider-container">
+            <input type="range" id="hornSlider" min="5" max="30" value="12">
+          </div>
+          <div class="helper-text">Length of light celebration and goal horn playback per goal.</div>
+        </div>
+
+        <!-- Virtual LED Ring Live Preview -->
+        <div class="form-group">
+          <label>Live Ring Visualiser Preview</label>
+          <div class="ring-preview-container">
+            <canvas id="ringCanvas" width="160" height="160"></canvas>
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;">Live animation in team colour</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Idle Lighting Behaviour -->
+      <div class="card">
+        <h2>🌙 Idle Lighting Behaviour</h2>
+        <div class="form-group">
+          <label for="idleEffect">Between Games / Idle Mode</label>
+          <select id="idleEffect">
+            <option value="0">🌑 Dark / Off</option>
+            <option value="1">🌬️ Team Colour Breathe (Subtle Ambient Glow)</option>
+            <option value="2">💡 Solid Team Colour Accent</option>
+            <option value="3">🔥 Candle / Ember Flicker</option>
+          </select>
+          <div class="helper-text">Lighting style when no game event is actively firing.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================================================== -->
+    <!-- TAB 3: EVENTS (GAME EVENT ACTION MATRIX)              -->
+    <!-- ===================================================== -->
+    <div id="tab-events" class="tab-page">
+      <div class="card">
+        <h2>⚡ Event Trigger Matrix</h2>
+        <div class="helper-text" style="margin-bottom:14px;">Select which game milestones trigger goal light alerts, sounds, and lighting effects.</div>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="chkEventGoal" checked disabled>
+          <div class="chk-text">
+            <span class="chk-title">🚨 Favourite Team Goal</span>
+            <span class="chk-desc">Full celebration fanfare, goal horn sound, and primary lighting effect.</span>
+          </div>
+        </label>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="chkOpponent">
+          <div class="chk-text">
+            <span class="chk-title">🥅 Opponent Goal Alert</span>
+            <span class="chk-desc">Subtle amber warning pulse when the opposing team scores.</span>
+          </div>
+        </label>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="chkPowerPlay" checked>
+          <div class="chk-text">
+            <span class="chk-title">⚡ Power Play Awarded</span>
+            <span class="chk-desc">Vibrant gold chase animation when your team gets the man advantage.</span>
+          </div>
+        </label>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="chkBuzzer" checked>
+          <div class="chk-text">
+            <span class="chk-title">🚨 Period End & Start Buzzer</span>
+            <span class="chk-desc">Sounds the arena horn at the conclusion of each period.</span>
+          </div>
+        </label>
+
+        <label class="checkbox-row" data-hw="lights">
+          <input type="checkbox" id="chkIntermission" checked>
+          <div class="chk-text">
+            <span class="chk-title">☕ Relaxed Intermission Glow</span>
+            <span class="chk-desc">Transitions to calm ambient team colour lighting during the 18-minute break.</span>
+          </div>
+        </label>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="chkWin" checked>
+          <div class="chk-text">
+            <span class="chk-title">🏆 Game Victory Fanfare</span>
+            <span class="chk-desc">Extended victory horn and rainbow light celebration when your team wins!</span>
+          </div>
+        </label>
+      </div>
+    </div>
+
+    <!-- ===================================================== -->
+    <!-- TAB 4: SYNC (TV BROADCAST SYNCHRONISATION)            -->
+    <!-- ===================================================== -->
+    <div id="tab-sync" class="tab-page">
+      
+      <!-- TV Broadcast Delay Buffer -->
+      <div class="card">
+        <h2>⏱️ TV Broadcast Delay</h2>
+        <div class="helper-text" style="margin-bottom:14px;">Hold celebrations in buffer so your goal light never triggers before the puck crosses the line on your TV feed!</div>
+        
+        <div class="form-group">
+          <label>Broadcast Delay: <strong id="delayVal" style="color:var(--accent);">0s (Instantaneous)</strong></label>
+          <div class="slider-container">
+            <input type="range" id="delaySlider" min="0" max="120" value="0" step="1">
+          </div>
+        </div>
+
+        <label style="margin-top:12px;">Quick Broadcaster Presets:</label>
+        <div class="preset-row">
+          <button type="button" class="preset-btn" onclick="setBroadcastPreset(0)">⚡ Cable / OTA (0s)</button>
+          <button type="button" class="preset-btn" onclick="setBroadcastPreset(22)">🍁 Sportsnet+ (22s)</button>
+          <button type="button" class="preset-btn" onclick="setBroadcastPreset(28)">🏒 NHL.tv / ESPN+ (28s)</button>
+          <button type="button" class="preset-btn" onclick="setBroadcastPreset(45)">📺 YouTube TV (45s)</button>
+        </div>
+      </div>
+
+      <!-- Live Game Clock Synchroniser -->
+      <div class="card">
+        <h2>📺 Game Clock Matcher</h2>
+        <div class="helper-text" style="margin-bottom:12px;">Compare the live official NHL API game clock with your screen to dial in your synchronisation:</div>
+
+        <div style="background:#11141a; border-radius:10px; border:1px solid var(--border); padding:14px; text-align:center; margin-bottom:12px;">
+          <div style="font-size:0.75rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Official NHL Cloud Clock</div>
+          <div id="syncNhlClock" style="font-size:1.6rem; font-weight:800; color:var(--text); margin:4px 0;">--:--</div>
+          <div id="syncNhlPeriod" style="font-size:0.8rem; color:var(--text-muted);">Period: Not In Progress</div>
+        </div>
+
+        <div class="btn-row" style="margin-bottom:8px;">
+          <button type="button" onclick="nudgeDelay(-5)">⏪ -5s</button>
+          <button type="button" onclick="nudgeDelay(-1)">◀️ -1s</button>
+          <button type="button" onclick="nudgeDelay(1)">▶️ +1s</button>
+          <button type="button" onclick="nudgeDelay(5)">⏩ +5s</button>
+        </div>
+
+        <button type="button" id="btnSyncWhistle" style="width:100%; padding:11px; background:var(--btn-bg); border:1px solid var(--border); border-radius:8px; font-weight:600; cursor:pointer;">
+          🎯 Sync on TV Whistle / Clock Match
+        </button>
+      </div>
+    </div>
+
+    <!-- ===================================================== -->
+    <!-- TAB 5: SYSTEM (HARDWARE, WI-FI & DEVICE PREFS)        -->
+    <!-- ===================================================== -->
+    <div id="tab-system" class="tab-page">
+      
+      <!-- Device Customisation -->
+      <div class="card">
+        <h2>🏷️ Device Customisation</h2>
+        <div class="form-group">
+          <label for="deviceNameInput">Goal Light Name</label>
+          <input type="text" id="deviceNameInput" placeholder="NHL Goal Light" maxlength="32">
+          <div class="helper-text">Custom name displayed across your web portal, home screen icon, and mDNS network.</div>
+        </div>
+      </div>
+
+      <!-- Connected Hardware Modules -->
+      <div class="card">
+        <h2>🔌 Attached Hardware Modules</h2>
+        <div class="helper-text" style="margin-bottom:12px;">Select the components physically attached. Unselected hardware options will be hidden automatically across all pages.</div>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="chkHwLights" checked>
+          <div class="chk-text">
+            <span class="chk-title">💡 Addressable RGB LEDs (WS2812B)</span>
+            <span class="chk-desc">Goal celebration beacon, team colour breathing, and ambient ring lighting.</span>
+          </div>
+        </label>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="chkHwSpeaker" checked>
+          <div class="chk-text">
+            <span class="chk-title">🔊 DFPlayer Mini Audio (Speaker)</span>
+            <span class="chk-desc">Authentic goal horns, period end sirens, and championship fanfares.</span>
+          </div>
+        </label>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="chkHwDisplay">
+          <div class="chk-text">
+            <span class="chk-title">📺 GC9A01 Circular LCD Display</span>
+            <span class="chk-desc">Phase 3 round puck screen showing live scores and team logos.</span>
+          </div>
+        </label>
+      </div>
+
+      <!-- Wi-Fi Network Setup -->
+      <div class="card" id="wifiCard">
+        <h2>📶 Wi-Fi Settings</h2>
+        <div class="form-group">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <label style="margin:0;">Select Nearby Network</label>
+            <button type="button" id="btnRescan" style="flex:none; padding:4px 10px; font-size:0.75rem; border-radius:6px; background:var(--btn-bg); border:1px solid var(--border); color:var(--text); cursor:pointer;">🔄 Rescan</button>
+          </div>
+          <select id="wifiSelect">
+            <option value="" disabled selected>🔍 Scanning for Wi-Fi networks...</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="manualSsidGroup" style="display:none;">
+          <label for="wifiSsid">Wi-Fi Network Name (SSID)</label>
+          <input type="text" id="wifiSsid" placeholder="Enter Wi-Fi SSID" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+        </div>
+
+        <div class="form-group">
+          <label for="wifiPass">Wi-Fi Password</label>
+          <div style="position:relative; display:flex; align-items:center;">
+            <input type="password" id="wifiPass" placeholder="Enter Wi-Fi Password" autocomplete="new-password" style="padding-right:42px;">
+            <button type="button" id="btnTogglePass" style="position:absolute; right:4px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1.1rem; padding:4px 8px; flex:none;">👁️</button>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top:14px; border-top:1px solid var(--border); padding-top:12px;">
+          <label for="apPass">Hotspot Password (Optional)</label>
+          <div style="position:relative; display:flex; align-items:center;">
+            <input type="password" id="apPass" placeholder="Leave blank for open network (min 8 chars)" autocomplete="new-password" style="padding-right:42px;">
+            <button type="button" id="btnToggleApPass" style="position:absolute; right:4px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1.1rem; padding:4px 8px; flex:none;">👁️</button>
+          </div>
+          <div class="helper-text">Security password for <strong>NHL-Goal-Light-Setup</strong> Wi-Fi. Leave blank for open access.</div>
+        </div>
+      </div>
+
+      <!-- Firmware & Updates -->
+      <div class="card">
+        <h2>🔄 Firmware & Updates</h2>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <span style="font-size:0.85rem; color:var(--text-muted)">Current Version: <strong id="curVer" style="color:var(--text)">v1.1.0.0</strong></span>
+          <button type="button" id="btnCheckUpdate" style="padding:6px 12px; font-size:0.8rem; background:var(--btn-bg); border:1px solid var(--border); color:var(--text); border-radius:8px; cursor:pointer;">🔍 Check GitHub</button>
+        </div>
+        <div id="updateInfo" style="display:none; padding:10px; border-radius:8px; background:rgba(46,160,67,0.15); border:1px solid var(--success); margin-bottom:12px; font-size:0.82rem; line-height:1.4;"></div>
+        
+        <div class="form-group" style="margin-bottom:8px;">
+          <label for="otaFile">Manual OTA Firmware Upload (.bin)</label>
+          <input type="file" id="otaFile" accept=".bin" style="font-size:0.8rem; padding:8px 0; color:var(--text-muted);">
+        </div>
+        <button type="button" id="btnOtaUpload" style="width:100%; padding:10px; background:#1f6feb; border:none; border-radius:8px; color:white; font-weight:600; cursor:pointer; display:none;">⚡ Install Firmware Update</button>
+        <div id="otaProgress" style="display:none; margin-top:8px;">
+          <div style="background:var(--border); border-radius:6px; height:12px; overflow:hidden;">
+            <div id="otaBar" style="background:#1f6feb; height:100%; width:0%; transition:width 0.2s;"></div>
+          </div>
+          <div id="otaText" style="font-size:0.75rem; color:var(--text-muted); text-align:center; margin-top:4px;">Uploading: 0%</div>
+        </div>
+      </div>
+
+      <!-- System Diagnostics & Maintenance -->
+      <div class="card">
+        <h2>🛠️ Diagnostics & Maintenance</h2>
+        <div style="font-size:0.82rem; color:var(--text-muted); display:flex; flex-direction:column; gap:6px; margin-bottom:12px;">
+          <div>Device IP: <strong id="diagIp" style="color:var(--text)">--</strong></div>
+          <div>Free Memory: <strong id="diagHeap" style="color:var(--text)">--</strong></div>
+        </div>
+        <button type="button" id="btnRestartDevice" style="background:rgba(230,57,70,0.15); border:1px solid var(--accent); color:#fff;">🔄 Reboot Goal Light</button>
+      </div>
+    </div>
+
+  </div> <!-- /container -->
+
+  <!-- Fixed Bottom Save Bar -->
+  <div class="fixed-save-bar">
+    <div class="save-inner">
+      <button type="button" id="btnSave" class="primary" style="padding:14px; font-size:0.95rem;">💾 Save & Apply Settings</button>
+    </div>
   </div>
 
   <!-- Save & Reboot Modal Overlay -->
-  <div id="saveModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(13,17,23,0.95); z-index:9999; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); align-items:center; justify-content:center; padding:20px; box-sizing:border-box;">
-    <div style="background:#161b22; border:1px solid var(--border); border-radius:16px; padding:24px; max-width:400px; width:100%; text-align:center; box-shadow:0 12px 36px rgba(0,0,0,0.6);">
+  <div id="saveModal" class="modal-overlay">
+    <div class="modal-content">
       <div id="modalIcon" style="font-size:3rem; margin-bottom:12px;">🚨</div>
       <h3 id="modalTitle" style="font-size:1.2rem; font-weight:700; margin-bottom:8px; color:var(--text);">Connecting to Home Wi-Fi</h3>
       <p id="modalBody" style="font-size:0.88rem; color:var(--text-muted); line-height:1.5; margin-bottom:16px;">Applying your configuration...</p>
@@ -340,20 +834,22 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
   </div>
 
   <script>
+    // 32 NHL Teams with Primary Hex Colours
     const TEAMS = [
-      ["ANA", "Anaheim Ducks"], ["BOS", "Boston Bruins"], ["BUF", "Buffalo Sabres"],
-      ["CGY", "Calgary Flames"], ["CAR", "Carolina Hurricanes"], ["CHI", "Chicago Blackhawks"],
-      ["COL", "Colorado Avalanche"], ["CBJ", "Columbus Blue Jackets"], ["DAL", "Dallas Stars"],
-      ["DET", "Detroit Red Wings"], ["EDM", "Edmonton Oilers"], ["FLA", "Florida Panthers"],
-      ["LAK", "Los Angeles Kings"], ["MIN", "Minnesota Wild"], ["MTL", "Montreal Canadiens"],
-      ["NSH", "Nashville Predators"], ["NJD", "New Jersey Devils"], ["NYI", "New York Islanders"],
-      ["NYR", "New York Rangers"], ["OTT", "Ottawa Senators"], ["PHI", "Philadelphia Flyers"],
-      ["PIT", "Pittsburgh Penguins"], ["SJS", "San Jose Sharks"], ["SEA", "Seattle Kraken"],
-      ["STL", "St. Louis Blues"], ["TBL", "Tampa Bay Lightning"], ["TOR", "Toronto Maple Leafs"],
-      ["UTA", "Utah Hockey Club"], ["VAN", "Vancouver Canucks"], ["VGK", "Vegas Golden Knights"],
-      ["WSH", "Washington Capitals"], ["WPG", "Winnipeg Jets"]
+      ["ANA", "Anaheim Ducks", "#F47A38"], ["BOS", "Boston Bruins", "#FFB81C"], ["BUF", "Buffalo Sabres", "#002654"],
+      ["CGY", "Calgary Flames", "#C8102E"], ["CAR", "Carolina Hurricanes", "#CC0000"], ["CHI", "Chicago Blackhawks", "#CF0A2C"],
+      ["COL", "Colorado Avalanche", "#6F263D"], ["CBJ", "Columbus Blue Jackets", "#002654"], ["DAL", "Dallas Stars", "#006847"],
+      ["DET", "Detroit Red Wings", "#CE1126"], ["EDM", "Edmonton Oilers", "#041E42"], ["FLA", "Florida Panthers", "#041E42"],
+      ["LAK", "Los Angeles Kings", "#111111"], ["MIN", "Minnesota Wild", "#154734"], ["MTL", "Montreal Canadiens", "#AF1E2D"],
+      ["NSH", "Nashville Predators", "#FFB81C"], ["NJD", "New Jersey Devils", "#CE1126"], ["NYI", "New York Islanders", "#00539B"],
+      ["NYR", "New York Rangers", "#0038A8"], ["OTT", "Ottawa Senators", "#DA1A32"], ["PHI", "Philadelphia Flyers", "#F74902"],
+      ["PIT", "Pittsburgh Penguins", "#FCB514"], ["SJS", "San Jose Sharks", "#006D75"], ["SEA", "Seattle Kraken", "#001628"],
+      ["STL", "St. Louis Blues", "#002F87"], ["TBL", "Tampa Bay Lightning", "#002868"], ["TOR", "Toronto Maple Leafs", "#00205B"],
+      ["UTA", "Utah Hockey Club", "#79CAEC"], ["VAN", "Vancouver Canucks", "#00205B"], ["VGK", "Vegas Golden Knights", "#B4975A"],
+      ["WSH", "Washington Capitals", "#041E42"], ["WPG", "Winnipeg Jets", "#041E42"]
     ];
 
+    // Populate Team Select
     const teamSelect = document.getElementById('teamSelect');
     TEAMS.forEach(([abbrev, name]) => {
       const opt = document.createElement('option');
@@ -362,6 +858,48 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       teamSelect.appendChild(opt);
     });
 
+    // Tab Navigation Switcher
+    const navTabs = document.querySelectorAll('.nav-tab');
+    const tabPages = document.querySelectorAll('.tab-page');
+
+    navTabs.forEach(tab => {
+      tab.onclick = () => {
+        const targetTab = tab.getAttribute('data-tab');
+        navTabs.forEach(t => t.classList.remove('active'));
+        tabPages.forEach(p => p.classList.remove('active'));
+
+        tab.classList.add('active');
+        const activePage = document.getElementById('tab-' + targetTab);
+        if (activePage) activePage.classList.add('active');
+      };
+    });
+
+    // Dynamic Hardware Enablement Engine
+    const chkHwLights = document.getElementById('chkHwLights');
+    const chkHwSpeaker = document.getElementById('chkHwSpeaker');
+    const chkHwDisplay = document.getElementById('chkHwDisplay');
+
+    function updateHardwareVisibility() {
+      const lightsOn = chkHwLights.checked;
+      const speakerOn = chkHwSpeaker.checked;
+      const displayOn = chkHwDisplay.checked;
+
+      document.querySelectorAll('[data-hw="lights"]').forEach(el => {
+        el.setAttribute('data-hw-hidden', !lightsOn);
+      });
+      document.querySelectorAll('[data-hw="speaker"]').forEach(el => {
+        el.setAttribute('data-hw-hidden', !speakerOn);
+      });
+      document.querySelectorAll('[data-hw="display"]').forEach(el => {
+        el.setAttribute('data-hw-hidden', !displayOn);
+      });
+    }
+
+    chkHwLights.onchange = updateHardwareVisibility;
+    chkHwSpeaker.onchange = updateHardwareVisibility;
+    chkHwDisplay.onchange = updateHardwareVisibility;
+
+    // Sliders
     const brightSlider = document.getElementById('brightSlider');
     const brightVal = document.getElementById('brightVal');
     brightSlider.oninput = () => brightVal.textContent = Math.round((brightSlider.value / 255) * 100) + '%';
@@ -374,6 +912,106 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     const hornVal = document.getElementById('hornVal');
     hornSlider.oninput = () => hornVal.textContent = hornSlider.value + 's';
 
+    const delaySlider = document.getElementById('delaySlider');
+    const delayVal = document.getElementById('delayVal');
+    delaySlider.oninput = () => {
+      const v = parseInt(delaySlider.value);
+      delayVal.textContent = v === 0 ? '0s (Instantaneous)' : v + 's delay';
+    };
+
+    window.setBroadcastPreset = (sec) => {
+      delaySlider.value = sec;
+      delaySlider.oninput();
+    };
+
+    window.nudgeDelay = (delta) => {
+      let v = parseInt(delaySlider.value) + delta;
+      if (v < 0) v = 0;
+      if (v > 120) v = 120;
+      delaySlider.value = v;
+      delaySlider.oninput();
+    };
+
+    // Virtual LED Ring Preview Renderer
+    const ringCanvas = document.getElementById('ringCanvas');
+    const ringCtx = ringCanvas.getContext('2d');
+    let previewStep = 0;
+
+    function getTeamColourHex(abbrev) {
+      const t = TEAMS.find(item => item[0] === abbrev);
+      return t ? t[2] : '#e63946';
+    }
+
+    function renderVirtualRing() {
+      const nPixels = parseInt(document.getElementById('ledPixels').value) || 16;
+      const effect = parseInt(document.getElementById('effectSelect').value) || 0;
+      const teamHex = getTeamColourHex(teamSelect.value);
+      const isReverse = document.getElementById('chkLedReverse').checked;
+
+      const w = ringCanvas.width;
+      const h = ringCanvas.height;
+      ringCtx.clearRect(0, 0, w, h);
+
+      const cx = w / 2;
+      const cy = h / 2;
+      const radius = 62;
+      const ledRadius = Math.max(3, Math.min(8, 90 / nPixels));
+
+      for (let i = 0; i < nPixels; i++) {
+        const mappedIdx = isReverse ? ((nPixels - 1) - i) : i;
+        const angle = (mappedIdx / nPixels) * (2 * Math.PI) - (Math.PI / 2);
+        const x = cx + radius * Math.cos(angle);
+        const y = cy + radius * Math.sin(angle);
+
+        let alpha = 0.15;
+        let fill = teamHex;
+
+        if (effect === 0) { // Halogen Beacon
+          const dist = Math.min(Math.abs(i - previewStep), Math.abs(i - previewStep + nPixels), Math.abs(i - previewStep - nPixels));
+          if (dist === 0) alpha = 1.0;
+          else if (dist === 1) alpha = 0.55;
+          else if (dist === 2) alpha = 0.2;
+          else alpha = 0.05;
+        } else if (effect === 1) { // Arena Strobe
+          alpha = (previewStep % 2 === 0) ? 1.0 : 0.05;
+          fill = (previewStep % 4 === 0) ? '#ffffff' : teamHex;
+        } else if (effect === 2) { // Breathe
+          alpha = (Math.sin(previewStep * 0.15) + 1.0) / 2.0 * 0.9 + 0.1;
+        } else if (effect === 3) { // Dual Siren
+          const half = Math.floor(nPixels / 2);
+          const isLeft = (i < half);
+          const sideA = ((previewStep % 12) < 6);
+          const flashOn = (previewStep % 2 === 0);
+          if (flashOn && ((sideA && isLeft) || (!sideA && !isLeft))) {
+            alpha = 1.0;
+            fill = isLeft ? teamHex : '#ffffff';
+          } else {
+            alpha = 0.08;
+          }
+        } else if (effect === 4) { // Heartbeat
+          const sub = previewStep % 16;
+          alpha = (sub === 0 || sub === 1 || sub === 4 || sub === 5) ? 1.0 : 0.1;
+        }
+
+        ringCtx.beginPath();
+        ringCtx.arc(x, y, ledRadius, 0, 2 * Math.PI);
+        ringCtx.fillStyle = fill;
+        ringCtx.globalAlpha = alpha;
+        ringCtx.fill();
+        ringCtx.globalAlpha = 1.0;
+
+        // Subtle outline
+        ringCtx.lineWidth = 1;
+        ringCtx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ringCtx.stroke();
+      }
+
+      previewStep++;
+      requestAnimationFrame(renderVirtualRing);
+    }
+    requestAnimationFrame(renderVirtualRing);
+
+    // Wi-Fi Scanning & Password Controls
     const wifiSelect = document.getElementById('wifiSelect');
     const wifiSsid = document.getElementById('wifiSsid');
     const manualSsidGroup = document.getElementById('manualSsidGroup');
@@ -387,23 +1025,15 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     let scanPollTimer = null;
 
     btnTogglePass.onclick = () => {
-      if (wifiPass.type === 'password') {
-        wifiPass.type = 'text';
-        btnTogglePass.textContent = '🔒';
-      } else {
-        wifiPass.type = 'password';
-        btnTogglePass.textContent = '👁️';
-      }
+      const isPass = wifiPass.type === 'password';
+      wifiPass.type = isPass ? 'text' : 'password';
+      btnTogglePass.textContent = isPass ? '🔒' : '👁️';
     };
 
     btnToggleApPass.onclick = () => {
-      if (apPass.type === 'password') {
-        apPass.type = 'text';
-        btnToggleApPass.textContent = '🔒';
-      } else {
-        apPass.type = 'password';
-        btnToggleApPass.textContent = '👁️';
-      }
+      const isPass = apPass.type === 'password';
+      apPass.type = isPass ? 'text' : 'password';
+      btnToggleApPass.textContent = isPass ? '🔒' : '👁️';
     };
 
     wifiSelect.onchange = () => {
@@ -504,11 +1134,25 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         .catch(() => fetchScan(0));
     };
 
-    // Fetch initial config
+    // Load initial config from ESP32
     fetch('/api/config')
       .then(r => r.json())
       .then(cfg => {
+        if (cfg.deviceName) {
+          document.getElementById('deviceNameInput').value = cfg.deviceName;
+          document.getElementById('titleDeviceName').textContent = '🚨 ' + cfg.deviceName;
+        }
         if (cfg.team) teamSelect.value = cfg.team;
+        if (cfg.hwLights !== undefined) chkHwLights.checked = !!cfg.hwLights;
+        if (cfg.hwSpeaker !== undefined) chkHwSpeaker.checked = !!cfg.hwSpeaker;
+        if (cfg.hwDisplay !== undefined) chkHwDisplay.checked = !!cfg.hwDisplay;
+        updateHardwareVisibility();
+
+        if (cfg.numLeds) document.getElementById('ledPixels').value = cfg.numLeds;
+        if (cfg.ledLayout !== undefined) document.getElementById('ledLayout').value = cfg.ledLayout;
+        if (cfg.ledReverse !== undefined) document.getElementById('chkLedReverse').checked = !!cfg.ledReverse;
+        if (cfg.idleEffect !== undefined) document.getElementById('idleEffect').value = cfg.idleEffect;
+
         if (cfg.brightness) {
           brightSlider.value = cfg.brightness;
           brightVal.textContent = Math.round((cfg.brightness / 255) * 100) + '%';
@@ -522,50 +1166,84 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
           hornVal.textContent = cfg.hornDuration + 's';
         }
         if (cfg.effectStyle !== undefined) document.getElementById('effectSelect').value = cfg.effectStyle;
+
         document.getElementById('chkOpponent').checked = !!cfg.alertOpponent;
         document.getElementById('chkPowerPlay').checked = !!cfg.alertPowerPlay;
         document.getElementById('chkBuzzer').checked = !!cfg.alertBuzzer;
+        if (cfg.alertIntermission !== undefined) document.getElementById('chkIntermission').checked = !!cfg.alertIntermission;
         document.getElementById('chkWin').checked = !!cfg.alertWin;
+
+        if (cfg.broadcastDelay !== undefined) {
+          delaySlider.value = cfg.broadcastDelay;
+          delaySlider.oninput();
+        }
+
         if (cfg.ssid) {
           savedSsid = cfg.ssid;
           wifiSsid.value = cfg.ssid;
         }
-        if (cfg.apPass) {
-          apPass.value = cfg.apPass;
-        }
+        if (cfg.apPass) apPass.value = cfg.apPass;
+
         fetchScan();
       }).catch(console.error);
 
-    // Fetch status
+    // Live Game & Status Polling
     function refreshStatus() {
       fetch('/api/status')
         .then(r => r.json())
         .then(s => {
           const badge = document.getElementById('statusBadge');
+          if (s.system && s.system.deviceName) {
+            document.getElementById('titleDeviceName').textContent = '🚨 ' + s.system.deviceName;
+          }
+
           if (s.game && s.game.state === 'LIVE') {
             badge.className = 'badge live';
             badge.textContent = `● LIVE: ${s.game.awayAbbrev} ${s.game.awayScore} - ${s.game.homeScore} ${s.game.homeAbbrev}`;
+            document.getElementById('liveAwayTeam').textContent = s.game.awayAbbrev || 'AWY';
+            document.getElementById('liveAwayScore').textContent = s.game.awayScore;
+            document.getElementById('liveHomeTeam').textContent = s.game.homeAbbrev || 'HME';
+            document.getElementById('liveHomeScore').textContent = s.game.homeScore;
+
+            const clockText = s.game.timeRemaining ? `P${s.game.period} ${s.game.timeRemaining}` : `Period ${s.game.period}`;
+            document.getElementById('liveGameClock').textContent = clockText;
+            document.getElementById('syncNhlClock').textContent = s.game.timeRemaining || 'In Progress';
+            document.getElementById('syncNhlPeriod').textContent = `Period ${s.game.period}`;
+
+            const interm = !!s.game.inIntermission;
+            document.getElementById('liveIntermissionNote').style.display = interm ? 'inline' : 'none';
+            document.getElementById('liveStatusSubtext').textContent = interm ? 'Intermission in progress.' : 'Live game active.';
           } else if (s.system && s.system.connected) {
             badge.className = 'badge';
             badge.textContent = `Online (${s.system.team})`;
+            document.getElementById('liveGameClock').textContent = 'Final / Off';
+            document.getElementById('syncNhlClock').textContent = '--:--';
+            document.getElementById('syncNhlPeriod').textContent = 'No Live Game Right Now';
           } else {
             badge.className = 'badge';
-            badge.textContent = 'AP Setup Mode';
+            badge.textContent = 'AP Setup Mode (192.168.4.1)';
+            document.getElementById('liveGameClock').textContent = 'Setup Mode';
           }
-          if (s.system && s.system.version) {
-            document.getElementById('curVer').textContent = 'v' + s.system.version;
+
+          if (s.system) {
+            if (s.system.version) document.getElementById('curVer').textContent = 'v' + s.system.version;
+            if (s.system.freeHeap) document.getElementById('diagHeap').textContent = `${Math.round(s.system.freeHeap / 1024)} KB`;
+            document.getElementById('diagIp').textContent = window.location.hostname;
           }
         }).catch(() => {});
     }
     setInterval(refreshStatus, 4000);
     refreshStatus();
 
-    // Test buttons
-    document.getElementById('btnTestHorn').onclick = () => {
+    // Test Celebration Buttons
+    document.getElementById('btnTestCelebration').onclick = () => {
       fetch('/api/test', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({horn: true, light: true}) });
     };
-    document.getElementById('btnTestLight').onclick = () => {
+    document.getElementById('btnTestLightsOnly').onclick = () => {
       fetch('/api/test', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({horn: false, light: true}) });
+    };
+    document.getElementById('btnTestHornOnly').onclick = () => {
+      fetch('/api/test', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({horn: true, light: false}) });
     };
 
     // Save & Reboot Flow
@@ -578,19 +1256,25 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     const modalBtn = document.getElementById('modalBtn');
 
     document.getElementById('btnSave').onclick = () => {
-      // 1. Defocus any active input to dismiss virtual keyboard & eliminate focus retention
       if (document.activeElement && typeof document.activeElement.blur === 'function') {
         document.activeElement.blur();
       }
 
-      // 2. Determine target SSID
       let targetSsid = wifiSelect.value;
       if (!targetSsid || targetSsid === '__manual__') {
         targetSsid = wifiSsid.value.trim();
       }
 
       const data = {
+        deviceName: document.getElementById('deviceNameInput').value.trim() || 'NHL Goal Light',
         team: teamSelect.value,
+        hwLights: chkHwLights.checked,
+        hwSpeaker: chkHwSpeaker.checked,
+        hwDisplay: chkHwDisplay.checked,
+        numLeds: parseInt(document.getElementById('ledPixels').value) || 16,
+        ledLayout: parseInt(document.getElementById('ledLayout').value) || 0,
+        ledReverse: document.getElementById('chkLedReverse').checked,
+        idleEffect: parseInt(document.getElementById('idleEffect').value) || 1,
         brightness: parseInt(brightSlider.value),
         volume: parseInt(volSlider.value),
         hornDuration: parseInt(hornSlider.value),
@@ -598,13 +1282,14 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         alertOpponent: document.getElementById('chkOpponent').checked,
         alertPowerPlay: document.getElementById('chkPowerPlay').checked,
         alertBuzzer: document.getElementById('chkBuzzer').checked,
+        alertIntermission: document.getElementById('chkIntermission').checked,
         alertWin: document.getElementById('chkWin').checked,
+        broadcastDelay: parseInt(delaySlider.value) || 0,
         ssid: targetSsid,
         pass: wifiPass.value,
         apPass: apPass.value
       };
 
-      // Show save modal overlay immediately
       saveModal.style.display = 'flex';
       modalBar.style.width = '20%';
       modalTitle.textContent = 'Saving Settings...';
@@ -622,7 +1307,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         if (res.restart) {
           modalIcon.textContent = '🚨';
           modalTitle.textContent = 'Connecting to Wi-Fi!';
-          modalBody.innerHTML = `Connecting to <strong>${targetSsid}</strong>... The Goal Light is now rebooting to join your home network.`;
+          modalBody.innerHTML = `Connecting to <strong>${targetSsid}</strong>... The Goal Light is rebooting to join your home network.`;
           modalInstructions.style.display = 'block';
 
           let pct = 20;
@@ -642,13 +1327,13 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
           modalBar.style.width = '100%';
           setTimeout(() => {
             saveModal.style.display = 'none';
-          }, 1500);
+          }, 1400);
         }
       })
       .catch(() => {
         modalIcon.textContent = '✅';
         modalTitle.textContent = 'Settings Saved';
-        modalBody.innerHTML = `Wi-Fi credentials saved. The Goal Light is rebooting to connect to <strong>${targetSsid}</strong>.`;
+        modalBody.innerHTML = `Settings written. The device is applying changes.`;
         modalInstructions.style.display = 'block';
         modalBar.style.width = '100%';
         modalBtn.style.display = 'block';
@@ -743,7 +1428,6 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
               };
             }
           } else {
-
             updateInfo.style.borderColor = 'var(--success)';
             updateInfo.style.background = 'rgba(46,160,67,0.15)';
             updateInfo.innerHTML = `<strong>✅ Firmware Up to Date (${currentTag})</strong>`;
@@ -757,7 +1441,6 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
           updateInfo.innerHTML = `No releases published yet on GitHub. Check <a href="https://github.com/RevelRob/NHLGoalLight" target="_blank" style="color:#58a6ff;">RevelRob/NHLGoalLight</a>.`;
         });
     };
-
 
     otaFile.onchange = () => {
       btnOtaUpload.style.display = otaFile.files.length > 0 ? 'block' : 'none';
@@ -802,6 +1485,20 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       };
 
       xhr.send(formData);
+    };
+
+    // Diagnostics: Reboot Button
+    document.getElementById('btnRestartDevice').onclick = () => {
+      if (confirm('Reboot the Goal Light now?')) {
+        fetch('/api/config', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ ssid: savedSsid }) // triggers reboot flag
+        }).then(() => {
+          alert('Goal Light is rebooting...');
+          setTimeout(() => window.location.reload(), 4000);
+        });
+      }
     };
   </script>
 </body>

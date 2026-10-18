@@ -23,8 +23,8 @@ timeline
 - [x] ESP32 core firmware setup (Arduino IDE / PlatformIO compatible).
 - [x] Wi-Fi Manager with captive portal fallback (`NHL-Goal-Light-Setup` AP mode on `192.168.4.1`).
 - [x] Embedded responsive dark-mode web portal (`http://goallight.local`):
-  - 32-team selector with automated team colors.
-  - Brightness, effect style (Beacon, Arena Strobe, Team Breath), and duration controls.
+  - 32-team selector with automated team colours.
+  - Brightness, celebration effect style (Rotating Halogen Beacon, Arena Strobe, Team Colour Breathe, Dual Siren Flasher, Heartbeat Pulse), and duration controls.
   - Sound controls with test buttons.
   - Custom SVG Goal Light tab icon (favicon).
   - **Over-The-Air (OTA) Web Firmware Updater (`/api/update`)** with real-time percentage progress bar.
@@ -38,13 +38,27 @@ timeline
 
 ## 📍 Phase 2: Enhanced Game Intelligence & Multi-Event Audio
 
+- [ ] **TV Broadcast Delay & Goal Horn Synchronisation Engine**:
+  - Eliminate broadcast spoiler issues where the NHL API detects a goal 15–45 seconds before cable or streaming feeds (e.g. Sportsnet+, TSN, ESPN+, Apple TV, Prime).
+  - Configurable broadcast delay buffer (0 to 120 seconds).
+  - **Interactive Live Game Clock Synchroniser**: Web portal displays live NHL game clock side-by-side with a "Sync with TV" tool so users can match their television screen to the exact second.
+  - **1-Tap Auto-Calibrator ("Puck Just Crossed the Line")**: User taps a button the moment a goal airs on their TV, automatically calculating the streaming latency delta for the remainder of the game.
+  - **Broadcaster Presets**: Quick delay profiles for Over-The-Air antenna (0s), Cable/Satellite (12s), and streaming apps (30–50s).
+  - **Discrete "Goal Pending" Cue**: Optional subtle amber LED cue notifying the user that a celebration is queued in the buffer before the horn erupts on TV.
+- [ ] **Pre-Game Notification Prompt & Custom Game Profiles**:
+  - Automatically detect upcoming games from the NHL API schedule.
+  - User-configurable pre-game notification alert (e.g. 15, 30, or 60 minutes prior to puck drop).
+  - Interactive prompt (via Web Push PWA notification, Home Assistant actionable alert, or physical beacon chime):
+    - Inquires whether the user wishes to activate the Goal Light for tonight's game.
+    - Allows immediate selection of game session profiles: *Family Friendly* (moderate volume, no loud buzzers), *Party / Game 7* (maximum brightness, full arena strobes & victory fanfare), or *Late Night / Quiet* (subtle colour breathing, muted audio).
 - [ ] **Remote GitHub Asset Sync Engine**: Connects to GitHub asset repository to dynamically download team-specific goal horns (`.mp3`) and 240×240 circular logos (`.bin`) into `LittleFS` on team change. See [REMOTE_ASSETS_SYNC.md](file:///Users/robtesta/Documents/Arduino/NHL%20Goal%20Light%2010.2026/NHL%20Goal%20Light/REMOTE_ASSETS_SYNC.md).
 - [ ] **Power Play Detection**: Parse NHL API 4-digit `situationCode` (e.g. `1451`) to trigger amber power-play strobes.
 - [ ] **Period Horns & Intermission Mode**: Distinct audio buzzers on period start/end; calm cyan breathing effect during intermissions.
 - [ ] **Victory Fanfare**: Detect `FINAL`/`OFF` state; if preferred team won, trigger an extended 30-second light celebration with arena victory music.
 - [ ] **Disallowed Goal Protection**: Handle score rollbacks silently if a goal is overturned upon video review.
 - [ ] **Do Not Disturb / Night Mode**: Automated scheduled dimming or silent mode for late West Coast games.
-- [ ] **Multi-Team Support**: Option to track a secondary team with distinct color alerts.
+- [ ] **Multi-Team Support**: Option to track a secondary team with distinct colour alerts.
+
 
 ---
 
@@ -54,7 +68,7 @@ Integration of a circular IPS LCD flush-mounted on the front face of the 3D-prin
 
 ### Hardware Candidates
 1. **Waveshare 1.28-inch Round LCD (GC9A01)**:
-   - Resolution: 240×240 pixels, 65K RGB colors.
+   - Resolution: 240×240 pixels, 65K RGB colours.
    - Interface: 4-wire SPI + DMA.
    - Form factor: Compact circular module flush-mounted on the base front face.
 2. **All-In-One ESP32-S3 Round Display Modules** (e.g. Waveshare ESP32-S3-Touch-LCD-1.28).
@@ -92,8 +106,9 @@ Integration of a circular IPS LCD flush-mounted on the front face of the 3D-prin
 - [ ] **Home Assistant Integration**:
   - Auto-discovery via MQTT (`homeassistant/light/goal_light/config`).
   - Native Home Assistant entities:
-    - `light.goal_light`: Power, brightness, color, and effect controls.
+    - `light.goal_light`: Power, brightness, colour, and effect controls.
     - `sensor.nhl_game_state`: Current score, period, clock, and opponent.
     - `button.test_goal_horn`: Trigger physical horn remotely.
     - `select.preferred_team`: Change team from Home Assistant dashboards.
 - [ ] **Whole-House Goal Sync**: Broadcast MQTT or webhook events so room lights (Philips Hue, LIFX, WLED) flash red in sync with the goal light.
+
