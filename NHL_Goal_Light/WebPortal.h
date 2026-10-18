@@ -1250,7 +1250,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       <div class="card">
         <h2>🔄 Firmware & Updates</h2>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <span style="font-size:0.85rem; color:var(--text-muted)">Current Version: <strong id="curVer" style="color:var(--text)">v1.1.0.6</strong></span>
+          <span style="font-size:0.85rem; color:var(--text-muted)">Current Version: <strong id="curVer" style="color:var(--text)">v1.1.0.7-beta</strong></span>
           <button type="button" id="btnCheckUpdate" style="padding:6px 12px; font-size:0.8rem; background:var(--btn-bg); border:1px solid var(--border); color:var(--text); border-radius:8px; cursor:pointer;">🔍 Check GitHub</button>
         </div>
         <label class="checkbox-row" style="margin-bottom:12px;">
@@ -2211,12 +2211,18 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
             const currentBrowserSec = wasRunning ? Math.max(0, liveClockState.officialSeconds - elapsedSinceSync) : liveClockState.officialSeconds;
 
-            if (isRunning && wasRunning && !periodChanged && !isIntermission && newOfficialSec >= currentBrowserSec) {
-              // API returned a stale/cached timestamp while play was active. Continue ticking smoothly down!
-              liveClockState.officialSeconds = currentBrowserSec;
-              liveClockState.lastSyncTime = now;
+            if (isRunning && wasRunning && !periodChanged && !isIntermission) {
+              if (newOfficialSec < currentBrowserSec) {
+                // The API feed has advanced with fresh arena time: update anchor
+                liveClockState.officialSeconds = newOfficialSec;
+                liveClockState.lastSyncTime = now;
+              } else {
+                // API returned stale/cached timestamp while play was active.
+                // DO NOT touch lastSyncTime or officialSeconds!
+                // Leaving the anchor point intact prevents phase shifts so every second ticks at exactly 1000ms.
+              }
             } else {
-              // Fresh API time, referee whistle/stoppage, period change, or intermission
+              // Referee whistle / stoppage, period change, or intermission transition
               liveClockState.officialSeconds = newOfficialSec;
               liveClockState.lastSyncTime = now;
             }

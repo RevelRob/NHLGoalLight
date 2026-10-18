@@ -349,13 +349,30 @@ private:
   String formatPlayObject(const String &playObj, int homeId, int awayId) {
     int pNum = extractInt(playObj, "\"number\":", 0);
     if (pNum <= 0) pNum = currentStatus.period;
-    String tip = extractString(playObj, "\"timeInPeriod\":\"", 0);
-    if (tip.length() == 0) tip = currentStatus.timeRemaining;
+    // Prefer timeRemaining so the play timestamp matches the descending arena & TV scoreboard clock
+    String trem = extractString(playObj, "\"timeRemaining\":\"", 0);
+    if (trem.length() == 0) {
+      String tip = extractString(playObj, "\"timeInPeriod\":\"", 0);
+      if (tip.length() > 0) {
+        int colon = tip.indexOf(':');
+        if (colon > 0) {
+          int m = tip.substring(0, colon).toInt();
+          int s = tip.substring(colon + 1).toInt();
+          int totalElapsed = (m * 60) + s;
+          int periodTotalSec = (pNum > 3) ? 300 : 1200;
+          int remSec = (periodTotalSec > totalElapsed) ? (periodTotalSec - totalElapsed) : 0;
+          char buf[16];
+          snprintf(buf, sizeof(buf), "%02d:%02d", remSec / 60, remSec % 60);
+          trem = String(buf);
+        }
+      }
+    }
+    if (trem.length() == 0) trem = currentStatus.timeRemaining;
     String typeDescKey = extractString(playObj, "\"typeDescKey\":\"", 0);
     int ownerId = extractInt(playObj, "\"eventOwnerTeamId\":", 0);
     String tm = (ownerId == homeId) ? currentStatus.homeAbbrev : ((ownerId == awayId) ? currentStatus.awayAbbrev : "");
 
-    String prefix = "P" + String(pNum) + " " + tip + " - ";
+    String prefix = "P" + String(pNum) + " " + trem + " - ";
 
     if (typeDescKey == "stoppage") {
       String reason = extractString(playObj, "\"reason\":\"", 0);
