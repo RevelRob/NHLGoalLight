@@ -248,6 +248,9 @@ void setupNetwork() {
   IPAddress apIP(192, 168, 4, 1);
   IPAddress netMsk(255, 255, 255, 0);
 
+  // Set conservative Wi-Fi TX power (11dBm) to prevent voltage drop on compact SuperMini regulator
+  WiFi.setTxPower(WIFI_POWER_11dBm);
+
   if (isApMode || strlen(config.wifi_ssid) == 0) {
     isApMode = true;
     Serial.println("[Network] Starting Access Point: " AP_SSID);
