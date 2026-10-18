@@ -12,6 +12,7 @@
 #include "AudioEngine.h"
 #include "NhlClient.h"
 #include "WebPortal.h"
+#include "AppIcon.h"
 
 // =====================================================
 // GLOBAL OBJECTS
@@ -364,6 +365,26 @@ void setupWebServer() {
   // Main page
   server.on("/", HTTP_GET, []() {
     server.send_P(200, "text/html", INDEX_HTML);
+  });
+
+  // App Icon (PNG for iOS Apple Touch Icon & Android PWA)
+  server.on("/icon.png", HTTP_GET, []() {
+    server.sendHeader("Cache-Control", "public, max-age=86400");
+    server.send_P(200, "image/png", (const char*)ICON_192_PNG, sizeof(ICON_192_PNG));
+  });
+  server.on("/apple-touch-icon.png", HTTP_GET, []() {
+    server.sendHeader("Cache-Control", "public, max-age=86400");
+    server.send_P(200, "image/png", (const char*)ICON_192_PNG, sizeof(ICON_192_PNG));
+  });
+  server.on("/favicon.ico", HTTP_GET, []() {
+    server.sendHeader("Cache-Control", "public, max-age=86400");
+    server.send_P(200, "image/png", (const char*)ICON_192_PNG, sizeof(ICON_192_PNG));
+  });
+
+  // Web App Manifest for PWA / Add to Home Screen
+  server.on("/manifest.json", HTTP_GET, []() {
+    server.sendHeader("Cache-Control", "public, max-age=86400");
+    server.send_P(200, "application/manifest+json", PWA_MANIFEST_JSON);
   });
 
   // REST API: Wi-Fi Scanner (GET)
