@@ -227,13 +227,16 @@ void handleButton(unsigned long now) {
 // NETWORK & WEB SERVER
 // =====================================================
 void setupNetwork() {
+  WiFi.persistent(false);
   WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
   delay(100);
 
   if (isApMode || strlen(config.wifi_ssid) == 0) {
     isApMode = true;
     Serial.println("[Network] Starting Access Point: " AP_SSID);
     WiFi.mode(WIFI_AP);
+    delay(100);
 
     IPAddress apIP(192, 168, 4, 1);
     IPAddress netMsk(255, 255, 255, 0);
