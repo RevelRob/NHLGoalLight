@@ -241,15 +241,29 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     </div>
 
     <!-- Wi-Fi Setup -->
-    <div class="card">
+    <div class="card" id="wifiCard">
       <h2>📶 Wi-Fi Settings</h2>
       <div class="form-group">
-        <label for="wifiSsid">Wi-Fi Network (SSID)</label>
-        <input type="text" id="wifiSsid" placeholder="Your Wi-Fi SSID">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <label style="margin:0;">Select Nearby Network</label>
+          <button type="button" id="btnRescan" style="flex:none; padding:4px 10px; font-size:0.75rem; border-radius:6px; background:var(--btn-bg); border:1px solid var(--border); color:var(--text); cursor:pointer;">🔄 Rescan</button>
+        </div>
+        <select id="wifiSelect">
+          <option value="" disabled selected>🔍 Scanning for Wi-Fi networks...</option>
+        </select>
       </div>
+
+      <div class="form-group" id="manualSsidGroup" style="display:none;">
+        <label for="wifiSsid">Wi-Fi Network Name (SSID)</label>
+        <input type="text" id="wifiSsid" placeholder="Enter Wi-Fi SSID" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+      </div>
+
       <div class="form-group">
         <label for="wifiPass">Wi-Fi Password</label>
-        <input type="password" id="wifiPass" placeholder="Wi-Fi Password">
+        <div style="position:relative; display:flex; align-items:center;">
+          <input type="password" id="wifiPass" placeholder="Enter Wi-Fi Password" autocomplete="new-password" style="padding-right:42px;">
+          <button type="button" id="btnTogglePass" style="position:absolute; right:4px; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:1.1rem; padding:4px 8px; flex:none;">👁️</button>
+        </div>
       </div>
     </div>
 
@@ -275,8 +289,26 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       </div>
     </div>
 
-    <button id="btnSave" class="primary" style="padding: 16px; font-size: 1rem;">💾 Save & Apply Settings</button>
+    <button type="button" id="btnSave" class="primary" style="padding: 16px; font-size: 1rem;">💾 Save & Apply Settings</button>
     <div id="statusToast" class="status-toast"></div>
+  </div>
+
+  <!-- Save & Reboot Modal Overlay -->
+  <div id="saveModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(13,17,23,0.95); z-index:9999; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); align-items:center; justify-content:center; padding:20px; box-sizing:border-box;">
+    <div style="background:#161b22; border:1px solid var(--border); border-radius:16px; padding:24px; max-width:400px; width:100%; text-align:center; box-shadow:0 12px 36px rgba(0,0,0,0.6);">
+      <div id="modalIcon" style="font-size:3rem; margin-bottom:12px;">🚨</div>
+      <h3 id="modalTitle" style="font-size:1.2rem; font-weight:700; margin-bottom:8px; color:var(--text);">Connecting to Home Wi-Fi</h3>
+      <p id="modalBody" style="font-size:0.88rem; color:var(--text-muted); line-height:1.5; margin-bottom:16px;">Applying your configuration...</p>
+      <div id="modalProgress" style="background:var(--border); border-radius:6px; height:8px; overflow:hidden; margin-bottom:16px;">
+        <div id="modalBar" style="background:var(--accent); height:100%; width:0%; transition:width 0.4s ease;"></div>
+      </div>
+      <div id="modalInstructions" style="display:none; background:rgba(46,160,67,0.12); border:1px solid var(--success); border-radius:8px; padding:12px; margin-bottom:16px; font-size:0.82rem; text-align:left; line-height:1.4;">
+        <strong>Next Steps:</strong><br>
+        1. Connect your phone back to your home Wi-Fi.<br>
+        2. Open <a href="http://goallight.local" target="_blank" style="color:#58a6ff; font-weight:600;">http://goallight.local</a> in your browser.
+      </div>
+      <button id="modalBtn" type="button" style="display:none; width:100%; padding:12px; border-radius:8px; background:var(--accent); color:#fff; border:none; font-weight:600; cursor:pointer;" onclick="window.location.href='http://goallight.local'">Open goallight.local</button>
+    </div>
   </div>
 
   <script>
@@ -314,6 +346,124 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     const hornVal = document.getElementById('hornVal');
     hornSlider.oninput = () => hornVal.textContent = hornSlider.value + 's';
 
+    const wifiSelect = document.getElementById('wifiSelect');
+    const wifiSsid = document.getElementById('wifiSsid');
+    const manualSsidGroup = document.getElementById('manualSsidGroup');
+    const btnRescan = document.getElementById('btnRescan');
+    const wifiPass = document.getElementById('wifiPass');
+    const btnTogglePass = document.getElementById('btnTogglePass');
+
+    let savedSsid = '';
+    let scanPollTimer = null;
+
+    btnTogglePass.onclick = () => {
+      if (wifiPass.type === 'password') {
+        wifiPass.type = 'text';
+        btnTogglePass.textContent = '🔒';
+      } else {
+        wifiPass.type = 'password';
+        btnTogglePass.textContent = '👁️';
+      }
+    };
+
+    wifiSelect.onchange = () => {
+      if (wifiSelect.value === '__manual__') {
+        manualSsidGroup.style.display = 'block';
+      } else {
+        manualSsidGroup.style.display = 'none';
+        wifiSsid.value = wifiSelect.value;
+      }
+    };
+
+    function renderNetworks(networks) {
+      const map = new Map();
+      networks.forEach(n => {
+        if (!n.ssid) return;
+        if (!map.has(n.ssid) || map.get(n.ssid).rssi < n.rssi) {
+          map.set(n.ssid, n);
+        }
+      });
+
+      const unique = Array.from(map.values()).sort((a, b) => b.rssi - a.rssi);
+
+      wifiSelect.innerHTML = '';
+      const defaultOpt = document.createElement('option');
+      defaultOpt.value = '';
+      defaultOpt.disabled = true;
+      defaultOpt.textContent = '-- Select your Wi-Fi network --';
+      wifiSelect.appendChild(defaultOpt);
+
+      let foundSaved = false;
+      unique.forEach(net => {
+        const opt = document.createElement('option');
+        opt.value = net.ssid;
+        const icon = net.rssi >= -60 ? '📶' : (net.rssi >= -75 ? '🛜' : '📡');
+        const lock = net.secure ? '🔒' : '🔓';
+        opt.textContent = `${icon} ${net.ssid} (${net.rssi} dBm, ${lock})`;
+        if (savedSsid && net.ssid === savedSsid) {
+          opt.selected = true;
+          foundSaved = true;
+          wifiSsid.value = net.ssid;
+        }
+        wifiSelect.appendChild(opt);
+      });
+
+      if (savedSsid && !foundSaved) {
+        const savedOpt = document.createElement('option');
+        savedOpt.value = savedSsid;
+        savedOpt.selected = true;
+        savedOpt.textContent = `📶 ${savedSsid} (Saved)`;
+        wifiSelect.appendChild(savedOpt);
+        wifiSsid.value = savedSsid;
+      }
+
+      const manualOpt = document.createElement('option');
+      manualOpt.value = '__manual__';
+      manualOpt.textContent = '✍️ Enter SSID Manually...';
+      wifiSelect.appendChild(manualOpt);
+
+      if (!savedSsid && !foundSaved) {
+        defaultOpt.selected = true;
+      }
+    }
+
+    function fetchScan(retryCount = 0) {
+      if (scanPollTimer) clearTimeout(scanPollTimer);
+      fetch('/api/scan')
+        .then(r => r.json())
+        .then(data => {
+          if (data && data.scanning) {
+            btnRescan.textContent = '⏳ Scanning...';
+            btnRescan.disabled = true;
+            if (retryCount < 8) {
+              scanPollTimer = setTimeout(() => fetchScan(retryCount + 1), 1500);
+            } else {
+              btnRescan.textContent = '🔄 Rescan';
+              btnRescan.disabled = false;
+            }
+          } else if (Array.isArray(data)) {
+            btnRescan.textContent = '🔄 Rescan';
+            btnRescan.disabled = false;
+            renderNetworks(data);
+          }
+        })
+        .catch(() => {
+          btnRescan.textContent = '🔄 Rescan';
+          btnRescan.disabled = false;
+        });
+    }
+
+    btnRescan.onclick = () => {
+      btnRescan.textContent = '⏳ Scanning...';
+      btnRescan.disabled = true;
+      wifiSelect.innerHTML = '<option value="" disabled selected>🔍 Scanning for Wi-Fi networks...</option>';
+      fetch('/api/scan', { method: 'POST' })
+        .then(() => {
+          scanPollTimer = setTimeout(() => fetchScan(0), 1000);
+        })
+        .catch(() => fetchScan(0));
+    };
+
     // Fetch initial config
     fetch('/api/config')
       .then(r => r.json())
@@ -336,7 +486,11 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         document.getElementById('chkPowerPlay').checked = !!cfg.alertPowerPlay;
         document.getElementById('chkBuzzer').checked = !!cfg.alertBuzzer;
         document.getElementById('chkWin').checked = !!cfg.alertWin;
-        if (cfg.ssid) document.getElementById('wifiSsid').value = cfg.ssid;
+        if (cfg.ssid) {
+          savedSsid = cfg.ssid;
+          wifiSsid.value = cfg.ssid;
+        }
+        fetchScan();
       }).catch(console.error);
 
     // Fetch status
@@ -371,8 +525,27 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       fetch('/api/test', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({horn: false, light: true}) });
     };
 
-    // Save button
+    // Save & Reboot Flow
+    const saveModal = document.getElementById('saveModal');
+    const modalIcon = document.getElementById('modalIcon');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalBody = document.getElementById('modalBody');
+    const modalBar = document.getElementById('modalBar');
+    const modalInstructions = document.getElementById('modalInstructions');
+    const modalBtn = document.getElementById('modalBtn');
+
     document.getElementById('btnSave').onclick = () => {
+      // 1. Defocus any active input to dismiss virtual keyboard & eliminate focus retention
+      if (document.activeElement && typeof document.activeElement.blur === 'function') {
+        document.activeElement.blur();
+      }
+
+      // 2. Determine target SSID
+      let targetSsid = wifiSelect.value;
+      if (!targetSsid || targetSsid === '__manual__') {
+        targetSsid = wifiSsid.value.trim();
+      }
+
       const data = {
         team: teamSelect.value,
         brightness: parseInt(brightSlider.value),
@@ -383,19 +556,58 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         alertPowerPlay: document.getElementById('chkPowerPlay').checked,
         alertBuzzer: document.getElementById('chkBuzzer').checked,
         alertWin: document.getElementById('chkWin').checked,
-        ssid: document.getElementById('wifiSsid').value,
-        pass: document.getElementById('wifiPass').value
+        ssid: targetSsid,
+        pass: wifiPass.value
       };
+
+      // Show save modal overlay immediately
+      saveModal.style.display = 'flex';
+      modalBar.style.width = '20%';
+      modalTitle.textContent = 'Saving Settings...';
+      modalBody.textContent = 'Writing configuration to flash memory...';
+      modalInstructions.style.display = 'none';
+      modalBtn.style.display = 'none';
+
       fetch('/api/config', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(data)
-      }).then(r => r.text()).then(msg => {
-        const t = document.getElementById('statusToast');
-        t.style.display = 'block';
-        t.style.background = '#2ea043';
-        t.textContent = 'Settings saved successfully!';
-        setTimeout(() => t.style.display = 'none', 3000);
+      })
+      .then(r => r.json().catch(() => ({ success: true, restart: false })))
+      .then(res => {
+        if (res.restart) {
+          modalIcon.textContent = '🚨';
+          modalTitle.textContent = 'Connecting to Wi-Fi!';
+          modalBody.innerHTML = `Connecting to <strong>${targetSsid}</strong>... The Goal Light is now rebooting to join your home network.`;
+          modalInstructions.style.display = 'block';
+
+          let pct = 20;
+          const interval = setInterval(() => {
+            pct += 8;
+            if (pct >= 100) {
+              pct = 100;
+              clearInterval(interval);
+              modalBtn.style.display = 'block';
+            }
+            modalBar.style.width = pct + '%';
+          }, 800);
+        } else {
+          modalIcon.textContent = '✅';
+          modalTitle.textContent = 'Settings Applied!';
+          modalBody.textContent = 'Your configuration has been updated successfully.';
+          modalBar.style.width = '100%';
+          setTimeout(() => {
+            saveModal.style.display = 'none';
+          }, 1500);
+        }
+      })
+      .catch(() => {
+        modalIcon.textContent = '✅';
+        modalTitle.textContent = 'Settings Saved';
+        modalBody.innerHTML = `Wi-Fi credentials saved. The Goal Light is rebooting to connect to <strong>${targetSsid}</strong>.`;
+        modalInstructions.style.display = 'block';
+        modalBar.style.width = '100%';
+        modalBtn.style.display = 'block';
       });
     };
 

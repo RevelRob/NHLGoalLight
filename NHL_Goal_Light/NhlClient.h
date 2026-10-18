@@ -126,7 +126,7 @@ private:
     client.setInsecure();
     HTTPClient http;
     http.begin(client, url);
-    http.setUserAgent("Rob-NHL-GoalLight/1.0");
+    http.setUserAgent("NHL-GoalLight/1.0");
     http.setTimeout(10000);
 
     int code = http.GET();
@@ -165,7 +165,7 @@ private:
     client.setInsecure();
     HTTPClient http;
     http.begin(client, url);
-    http.setUserAgent("Rob-NHL-GoalLight/1.0");
+    http.setUserAgent("NHL-GoalLight/1.0");
     http.setTimeout(8000);
 
     int code = http.GET();

@@ -34,6 +34,7 @@ unsigned long buttonDownTime = 0;
 unsigned long lastReleaseTime = 0;
 unsigned long buttonLockoutUntil = 0;
 int pressCount = 0;
+unsigned long scheduledRestartTime = 0;
 
 // =====================================================
 // FORWARD DECLARATIONS
@@ -52,9 +53,6 @@ void triggerGameWin();
 // =====================================================
 void setup() {
   Serial.begin(115200);
-  // Wait up to 2.5s for native USB Serial to connect
-  unsigned long serialWait = millis();
-  while (!Serial && (millis() - serialWait < 2500));
   delay(100);
 
   Serial.println("\n=================================");
@@ -109,6 +107,14 @@ void setup() {
 // =====================================================
 void loop() {
   unsigned long now = millis();
+
+  // Check for scheduled restart (e.g. after Wi-Fi settings saved)
+  if (scheduledRestartTime > 0 && now >= scheduledRestartTime) {
+    Serial.println("[System] Executing scheduled reboot to apply network settings...");
+    scheduledRestartTime = 0;
+    delay(100);
+    ESP.restart();
+  }
 
   // 1. Process physical button (supports external pin 9 and on-board pin 0)
   handleButton(now);
@@ -254,7 +260,7 @@ void setupNetwork() {
   if (isApMode || strlen(config.wifi_ssid) == 0) {
     isApMode = true;
     Serial.println("[Network] Starting Access Point: " AP_SSID);
-    WiFi.mode(WIFI_AP);
+    WiFi.mode(WIFI_AP_STA); // AP_STA allows background scanning while AP is active
     delay(50);
     WiFi.softAPConfig(apIP, apIP, netMsk);
     bool apSuccess = WiFi.softAP(AP_SSID);
@@ -262,6 +268,10 @@ void setupNetwork() {
 
     dnsServer.start(DNS_PORT, "*", apIP);
     Serial.printf("[Network] AP '%s' status: %s (IP: 192.168.4.1)\n", AP_SSID, apSuccess ? "ACTIVE" : "FAILED");
+
+    // Pre-cache nearby Wi-Fi networks immediately
+    WiFi.scanNetworks(true);
+
     leds.setMode(LED_AP_CONFIG);
 #ifdef PIN_STATUS_LED
     digitalWrite(PIN_STATUS_LED, LOW); // Blue LED ON solid in AP mode
@@ -292,6 +302,11 @@ void setupNetwork() {
       Serial.print("[Network] IP Address: ");
       Serial.println(WiFi.localIP());
 
+      // Turn off SoftAP once connected so phone re-joins home Wi-Fi automatically
+      WiFi.softAPdisconnect(true);
+      WiFi.mode(WIFI_STA);
+      isApMode = false;
+
       if (MDNS.begin(MDNS_HOSTNAME)) {
         Serial.println("[Network] mDNS responder started: http://" MDNS_HOSTNAME ".local");
       }
@@ -302,6 +317,7 @@ void setupNetwork() {
     } else {
       Serial.println("\n[Network] Wi-Fi Connection failed. AP remains broadcast on 192.168.4.1.");
       isApMode = true;
+      WiFi.scanNetworks(true);
       leds.setMode(LED_AP_CONFIG);
 #ifdef PIN_STATUS_LED
       digitalWrite(PIN_STATUS_LED, LOW); // Blue LED ON solid in AP mode
@@ -314,6 +330,46 @@ void setupWebServer() {
   // Main page
   server.on("/", HTTP_GET, []() {
     server.send_P(200, "text/html", INDEX_HTML);
+  });
+
+  // REST API: Wi-Fi Scanner (GET)
+  server.on("/api/scan", HTTP_GET, []() {
+    int16_t scanStatus = WiFi.scanComplete();
+    if (scanStatus == WIFI_SCAN_RUNNING) {
+      server.send(202, "application/json", "{\"scanning\":true}");
+      return;
+    }
+    if (scanStatus == WIFI_SCAN_FAILED) {
+      WiFi.scanNetworks(true);
+      server.send(202, "application/json", "{\"scanning\":true}");
+      return;
+    }
+
+    String json = "[";
+    int count = scanStatus;
+    int added = 0;
+    for (int i = 0; i < count; ++i) {
+      String ssid = WiFi.SSID(i);
+      if (ssid.length() == 0) continue; // Skip hidden/blank SSIDs
+
+      if (added > 0) json += ",";
+      ssid.replace("\\", "\\\\");
+      ssid.replace("\"", "\\\"");
+
+      json += "{\"ssid\":\"" + ssid + "\",";
+      json += "\"rssi\":" + String(WiFi.RSSI(i)) + ",";
+      json += "\"secure\":" + String(WiFi.encryptionType(i) != WIFI_AUTH_OPEN ? "true" : "false") + "}";
+      added++;
+    }
+    json += "]";
+    server.send(200, "application/json", json);
+  });
+
+  // REST API: Wi-Fi Scanner (POST - trigger fresh scan)
+  server.on("/api/scan", HTTP_POST, []() {
+    WiFi.scanDelete();
+    WiFi.scanNetworks(true);
+    server.send(202, "application/json", "{\"scanning\":true}");
   });
 
   // REST API: Config GET
@@ -337,6 +393,8 @@ void setupWebServer() {
   server.on("/api/config", HTTP_POST, []() {
     if (server.hasArg("plain")) {
       String body = server.arg("plain");
+
+      bool wifiConfigured = false;
 
       // Extract fields simply without large JSON parser overhead
       int teamPos = body.indexOf("\"team\":\"");
@@ -378,19 +436,37 @@ void setupWebServer() {
       int sPos = body.indexOf("\"ssid\":\"");
       if (sPos >= 0) {
         String s = body.substring(sPos + 8, body.indexOf("\"", sPos + 8));
-        strncpy(config.wifi_ssid, s.c_str(), sizeof(config.wifi_ssid));
+        s.trim();
+        if (s.length() > 0) {
+          if (strcmp(config.wifi_ssid, s.c_str()) != 0) {
+            wifiConfigured = true;
+            config.wifi_pass[0] = '\0';
+          }
+          strncpy(config.wifi_ssid, s.c_str(), sizeof(config.wifi_ssid));
+        }
       }
 
       int pPos = body.indexOf("\"pass\":\"");
       if (pPos >= 0) {
         String p = body.substring(pPos + 8, body.indexOf("\"", pPos + 8));
         if (p.length() > 0) {
+          if (strcmp(config.wifi_pass, p.c_str()) != 0) {
+            wifiConfigured = true;
+          }
           strncpy(config.wifi_pass, p.c_str(), sizeof(config.wifi_pass));
         }
       }
 
       saveConfiguration();
-      server.send(200, "text/plain", "OK");
+
+      bool shouldRestart = (isApMode && strlen(config.wifi_ssid) > 0) || wifiConfigured;
+      if (shouldRestart) {
+        scheduledRestartTime = millis() + 1200;
+        Serial.printf("[Config] Wi-Fi settings saved. Rebooting in 1.2s to connect to '%s'...\n", config.wifi_ssid);
+        server.send(200, "application/json", "{\"success\":true,\"restart\":true}");
+      } else {
+        server.send(200, "application/json", "{\"success\":true,\"restart\":false}");
+      }
       return;
     }
     server.send(400, "text/plain", "Bad Request");
