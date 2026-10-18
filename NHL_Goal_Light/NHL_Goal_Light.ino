@@ -68,6 +68,7 @@ void setup() {
 #endif
 
   pinMode(PIN_BUTTON, INPUT_PULLUP);
+  pinMode(0, INPUT_PULLUP); // On-board BOOT button on ESP32-S3 Super Mini
 
   // Load NVS config
   loadConfiguration();
@@ -85,10 +86,13 @@ void setup() {
   // Initialize NHL Client
   nhl.setTeam(config.primary_team);
 
-  // Check if button is held down during boot -> Force AP mode
-  if (digitalRead(PIN_BUTTON) == LOW) {
-    Serial.println("[Boot] Button held on power up: Forcing AP setup mode.");
+  // Check if either external button (GPIO 9) or on-board BOOT button (GPIO 0) is held during boot
+  if (digitalRead(PIN_BUTTON) == LOW || digitalRead(0) == LOW) {
+    Serial.println("[Boot] Button held on power up: Forcing AP setup mode and clearing stored Wi-Fi.");
     isApMode = true;
+    config.wifi_ssid[0] = '\0';
+    config.wifi_pass[0] = '\0';
+    saveConfiguration();
   }
 
   // Network Setup
@@ -106,11 +110,11 @@ void setup() {
 void loop() {
   unsigned long now = millis();
 
-  // 1. Process physical button
+  // 1. Process physical button (supports external pin 9 and on-board pin 0)
   handleButton(now);
 
   // 2. Process DNS server if in AP mode (captive portal)
-  if (isApMode) {
+  if (isApMode || WiFi.getMode() == WIFI_MODE_AP || WiFi.getMode() == WIFI_MODE_APSTA) {
     dnsServer.processNextRequest();
   }
 
@@ -176,7 +180,8 @@ void triggerGameWin() {
 void handleButton(unsigned long now) {
   if (now < buttonLockoutUntil) return;
 
-  bool isDown = digitalRead(PIN_BUTTON) == LOW;
+  // Supports both external tactile button (PIN_BUTTON) and on-board Super Mini BOOT button (GPIO 0)
+  bool isDown = (digitalRead(PIN_BUTTON) == LOW) || (digitalRead(0) == LOW);
 
   if (isDown && !buttonWasDown) {
     buttonWasDown = true;
@@ -187,10 +192,13 @@ void handleButton(unsigned long now) {
     buttonWasDown = false;
     unsigned long duration = now - buttonDownTime;
 
-    // Long press (> 4 seconds): reboot into AP mode
+    // Long press (> 4 seconds): reboot into AP mode and wipe invalid Wi-Fi
     if (duration > 4000) {
-      Serial.println("[Button] Long press detected. Switching to AP mode...");
+      Serial.println("[Button] Long press detected. Switching to AP mode & resetting Wi-Fi...");
       isApMode = true;
+      config.wifi_ssid[0] = '\0';
+      config.wifi_pass[0] = '\0';
+      saveConfiguration();
       setupNetwork();
       return;
     }
@@ -227,38 +235,38 @@ void handleButton(unsigned long now) {
 // NETWORK & WEB SERVER
 // =====================================================
 void setupNetwork() {
-  WiFi.persistent(false);
-  WiFi.disconnect(true);
-  WiFi.mode(WIFI_OFF);
-  delay(100);
+  IPAddress apIP(192, 168, 4, 1);
+  IPAddress netMsk(255, 255, 255, 0);
 
   if (isApMode || strlen(config.wifi_ssid) == 0) {
     isApMode = true;
     Serial.println("[Network] Starting Access Point: " AP_SSID);
     WiFi.mode(WIFI_AP);
+    delay(50);
+    WiFi.softAPConfig(apIP, apIP, netMsk);
+    bool apSuccess = WiFi.softAP(AP_SSID);
     delay(100);
 
-    IPAddress apIP(192, 168, 4, 1);
-    IPAddress netMsk(255, 255, 255, 0);
-    WiFi.softAPConfig(apIP, apIP, netMsk);
-    WiFi.softAP(AP_SSID); // Open AP for instant smartphone/PC connection
-
-    delay(200);
     dnsServer.start(DNS_PORT, "*", apIP);
-    Serial.print("[Network] AP IP address: ");
-    Serial.println(WiFi.softAPIP());
+    Serial.printf("[Network] AP '%s' status: %s (IP: 192.168.4.1)\n", AP_SSID, apSuccess ? "ACTIVE" : "FAILED");
     leds.setMode(LED_AP_CONFIG);
 #ifdef PIN_STATUS_LED
-    digitalWrite(PIN_STATUS_LED, LOW); // Blue LED ON in AP mode
+    digitalWrite(PIN_STATUS_LED, LOW); // Blue LED ON solid in AP mode
 #endif
   } else {
-    Serial.printf("[Network] Connecting to Wi-Fi '%s'...\n", config.wifi_ssid);
-    WiFi.mode(WIFI_STA);
+    // Both SoftAP and Station Mode: SoftAP remains available for phone connection while connecting to router
+    Serial.printf("[Network] Starting AP '%s' & connecting to '%s'...\n", AP_SSID, config.wifi_ssid);
+    WiFi.mode(WIFI_AP_STA);
+    delay(50);
+    WiFi.softAPConfig(apIP, apIP, netMsk);
+    WiFi.softAP(AP_SSID);
+    dnsServer.start(DNS_PORT, "*", apIP);
+
     WiFi.setHostname(MDNS_HOSTNAME);
     WiFi.begin(config.wifi_ssid, config.wifi_pass);
 
     unsigned long startAttempt = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 10000) {
+    while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 8000) {
       delay(200);
       Serial.print(".");
 #ifdef PIN_STATUS_LED
@@ -279,9 +287,12 @@ void setupNetwork() {
       digitalWrite(PIN_STATUS_LED, HIGH); // Blue LED OFF when connected online
 #endif
     } else {
-      Serial.println("\n[Network] Wi-Fi Connection failed. Falling back to AP Mode.");
+      Serial.println("\n[Network] Wi-Fi Connection failed. AP remains broadcast on 192.168.4.1.");
       isApMode = true;
-      setupNetwork();
+      leds.setMode(LED_AP_CONFIG);
+#ifdef PIN_STATUS_LED
+      digitalWrite(PIN_STATUS_LED, LOW); // Blue LED ON solid in AP mode
+#endif
     }
   }
 }
