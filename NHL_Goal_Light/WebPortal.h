@@ -2583,7 +2583,14 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         .then(data => {
           let rel = data;
           if (Array.isArray(data)) {
-            rel = data[0] || null;
+            let highest = null;
+            for (const r of data) {
+              const tag = r.tag_name || r.name || '';
+              if (!highest || compareVersions(tag, highest.tag_name || highest.name || '') > 0) {
+                highest = r;
+              }
+            }
+            rel = highest || data[0] || null;
           }
           if (!rel || (!rel.tag_name && !rel.name)) return checkPagesManifest();
           return rel;
