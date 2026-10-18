@@ -501,7 +501,12 @@ private:
       bool interm = (clockBlock.indexOf("\"inIntermission\":true") >= 0);
 
       if (sec >= 0) {
-        currentStatus.secondsRemaining = sec;
+        // Monotonic guard: If play has been running and API returns stale cached seconds, do not rewind
+        if (running && currentStatus.clockRunning && !interm && sec >= currentStatus.secondsRemaining) {
+          // Keep local smooth ticker
+        } else {
+          currentStatus.secondsRemaining = sec;
+        }
       }
 
       // Track referee stoppage & resume transitions
@@ -518,11 +523,24 @@ private:
       currentStatus.inIntermission = interm;
 
       if (currentStatus.inIntermission) {
-        currentStatus.timeRemaining = "Intermission";
         currentStatus.clockRunning = false;
+        if (sec > 0) {
+          int m = sec / 60;
+          int s = sec % 60;
+          char buf[16];
+          snprintf(buf, sizeof(buf), "%02d:%02d", m, s);
+          currentStatus.timeRemaining = String(buf);
+        } else {
+          String tr = extractString(clockBlock, "\"timeRemaining\":\"", 0);
+          if (tr.length() > 0 && tr != "00:00" && tr != "0:00") {
+            currentStatus.timeRemaining = tr;
+          } else {
+            currentStatus.timeRemaining = "Intermission";
+          }
+        }
       } else if (sec >= 0) {
-        int m = sec / 60;
-        int s = sec % 60;
+        int m = currentStatus.secondsRemaining / 60;
+        int s = currentStatus.secondsRemaining % 60;
         char buf[16];
         snprintf(buf, sizeof(buf), "%02d:%02d", m, s);
         currentStatus.timeRemaining = String(buf);
@@ -627,7 +645,12 @@ private:
       bool interm = (clockBlock.indexOf("\"inIntermission\":true") >= 0);
 
       if (sec >= 0) {
-        currentStatus.secondsRemaining = sec;
+        // Monotonic guard: If play has been running and API returns stale cached seconds, do not rewind
+        if (running && currentStatus.clockRunning && !interm && sec >= currentStatus.secondsRemaining) {
+          // Keep local smooth ticker
+        } else {
+          currentStatus.secondsRemaining = sec;
+        }
       }
 
       if (currentStatus.clockRunning && !running) {
@@ -641,11 +664,24 @@ private:
       currentStatus.inIntermission = interm;
 
       if (currentStatus.inIntermission) {
-        currentStatus.timeRemaining = "Intermission";
         currentStatus.clockRunning = false;
+        if (sec > 0) {
+          int m = sec / 60;
+          int s = sec % 60;
+          char buf[16];
+          snprintf(buf, sizeof(buf), "%02d:%02d", m, s);
+          currentStatus.timeRemaining = String(buf);
+        } else {
+          String tr = extractString(clockBlock, "\"timeRemaining\":\"", 0);
+          if (tr.length() > 0 && tr != "00:00" && tr != "0:00") {
+            currentStatus.timeRemaining = tr;
+          } else {
+            currentStatus.timeRemaining = "Intermission";
+          }
+        }
       } else if (sec >= 0) {
-        int m = sec / 60;
-        int s = sec % 60;
+        int m = currentStatus.secondsRemaining / 60;
+        int s = currentStatus.secondsRemaining % 60;
         char buf[16];
         snprintf(buf, sizeof(buf), "%02d:%02d", m, s);
         currentStatus.timeRemaining = String(buf);

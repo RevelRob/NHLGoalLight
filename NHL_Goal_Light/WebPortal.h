@@ -1250,7 +1250,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       <div class="card">
         <h2>🔄 Firmware & Updates</h2>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <span style="font-size:0.85rem; color:var(--text-muted)">Current Version: <strong id="curVer" style="color:var(--text)">v1.1.0.5</strong></span>
+          <span style="font-size:0.85rem; color:var(--text-muted)">Current Version: <strong id="curVer" style="color:var(--text)">v1.1.0.6</strong></span>
           <button type="button" id="btnCheckUpdate" style="padding:6px 12px; font-size:0.8rem; background:var(--btn-bg); border:1px solid var(--border); color:var(--text); border-radius:8px; cursor:pointer;">🔍 Check GitHub</button>
         </div>
         <label class="checkbox-row" style="margin-bottom:12px;">
@@ -1513,29 +1513,47 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     };
 
     function parseClockSeconds(str) {
-      if (!str || str === '--:--' || str.toLowerCase().indexOf('intermission') >= 0) return 1200;
+      if (!str || str === '--:--' || str.toLowerCase().indexOf('intermission') >= 0) return 0;
       const parts = str.split(':');
       if (parts.length === 2) {
         const m = parseInt(parts[0]) || 0;
         const s = parseInt(parts[1]) || 0;
         return (m * 60) + s;
       }
-      return 1200;
+      return 0;
     }
 
     function updateClientClocks() {
       if (!liveClockState.active) return;
       if (liveClockState.inIntermission) {
         const offClockEl = document.getElementById('liveOfficialClock');
-        if (offClockEl) offClockEl.textContent = 'Intermission';
         const syncNhlEl = document.getElementById('syncNhlClock');
-        if (syncNhlEl) syncNhlEl.textContent = 'Intermission';
         const gameClockEl = document.getElementById('liveGameClock');
-        if (gameClockEl) gameClockEl.textContent = `P${liveClockState.period} Intermission`;
         const targetEl = document.getElementById('liveTargetTvClock');
-        if (targetEl) targetEl.textContent = 'Intermission';
         const badgeEl = document.getElementById('liveDelayBadge');
-        if (badgeEl) badgeEl.textContent = '☕ Intermission in Progress';
+
+        let intermText = 'Intermission';
+        let badgeDetail = '☕ Intermission in Progress';
+
+        // Check if API supplied seconds remaining countdown for intermission
+        if (liveClockState.officialSeconds > 0) {
+          const now = Date.now();
+          const elapsed = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
+          const remSec = Math.max(0, liveClockState.officialSeconds - elapsed);
+          const iM = Math.floor(remSec / 60);
+          const iS = remSec % 60;
+          const iStr = `${iM}:${iS < 10 ? '0' : ''}${iS}`;
+          intermText = `INT ${iStr}`;
+          badgeDetail = `☕ Intermission (${iStr} remaining)`;
+          if (gameClockEl) gameClockEl.textContent = `P${liveClockState.period} Intermission (${iStr})`;
+        } else {
+          if (gameClockEl) gameClockEl.textContent = `P${liveClockState.period} Intermission`;
+        }
+
+        if (offClockEl) offClockEl.textContent = intermText;
+        if (syncNhlEl) syncNhlEl.textContent = intermText;
+        if (targetEl) targetEl.textContent = intermText;
+        if (badgeEl) badgeEl.textContent = badgeDetail;
         return;
       }
 
@@ -1612,15 +1630,66 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       if (badgeEl) badgeEl.textContent = badgeText;
     }
 
+    let lastUserDelayChange = 0;
+
     function updateDelayDisplays(v) {
       const txt = (v === 0) ? '0s (Instantaneous)' : v + 's delay';
       if (liveDelayVal) liveDelayVal.textContent = txt;
       if (delayVal) delayVal.textContent = txt;
-      if (liveDelaySlider) liveDelaySlider.value = v;
-      if (delaySlider) delaySlider.value = v;
+      if (liveDelaySlider && parseInt(liveDelaySlider.value) !== v) liveDelaySlider.value = v;
+      if (delaySlider && parseInt(delaySlider.value) !== v) delaySlider.value = v;
       liveClockState.delaySec = v;
       updateClientClocks();
     }
+
+    function sendQuickDelay(v) {
+      lastUserDelayChange = Date.now();
+      updateDelayDisplays(v);
+      fetch('/api/quick-set', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ broadcastDelay: v })
+      }).catch(console.error);
+    }
+
+    if (liveDelaySlider) {
+      liveDelaySlider.oninput = () => {
+        lastUserDelayChange = Date.now();
+        updateDelayDisplays(parseInt(liveDelaySlider.value) || 0);
+      };
+      liveDelaySlider.onchange = () => {
+        sendQuickDelay(parseInt(liveDelaySlider.value) || 0);
+      };
+    }
+    if (delaySlider) {
+      delaySlider.oninput = () => {
+        lastUserDelayChange = Date.now();
+        updateDelayDisplays(parseInt(delaySlider.value) || 0);
+      };
+      delaySlider.onchange = () => {
+        sendQuickDelay(parseInt(delaySlider.value) || 0);
+      };
+    }
+
+    window.quickSetPreset = (sec) => {
+      sendQuickDelay(sec);
+    };
+
+    window.setBroadcastPreset = (sec) => {
+      sendQuickDelay(sec);
+    };
+
+    window.quickNudgeDelay = (delta) => {
+      let cur = parseInt(liveDelaySlider ? liveDelaySlider.value : (delaySlider ? delaySlider.value : 0)) || 0;
+      let v = cur + delta;
+      if (v < 0) v = 0;
+      if (v > 120) v = 120;
+      sendQuickDelay(v);
+    };
+
+    window.nudgeDelay = (delta) => {
+      window.quickNudgeDelay(delta);
+    };
 
     // Expandable Visualiser Drawers
     const activeDrawers = {
@@ -2122,15 +2191,45 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 
             // Synchronise client clock timeline engine with ESP32 status
             liveClockState.active = true;
-            liveClockState.period = s.game.period || 1;
-            liveClockState.officialSeconds = (typeof s.game.secondsRemaining !== 'undefined' && s.game.secondsRemaining >= 0) ? s.game.secondsRemaining : parseClockSeconds(s.game.timeRemaining);
-            liveClockState.running = !!s.game.running;
-            liveClockState.inIntermission = !!s.game.inIntermission;
+            const newPeriod = s.game.period || 1;
+            const periodChanged = (newPeriod !== liveClockState.period);
+            liveClockState.period = newPeriod;
+
+            const newOfficialSec = (typeof s.game.secondsRemaining !== 'undefined' && s.game.secondsRemaining >= 0) ? s.game.secondsRemaining : parseClockSeconds(s.game.timeRemaining);
+            const isRunning = !!s.game.running;
+            const wasRunning = liveClockState.running;
+            const isIntermission = !!s.game.inIntermission;
+            liveClockState.inIntermission = isIntermission;
+            liveClockState.running = isRunning;
             liveClockState.stoppageElapsed = (typeof s.game.stoppageElapsed !== 'undefined') ? s.game.stoppageElapsed : 9999;
             liveClockState.resumeElapsed = (typeof s.game.resumeElapsed !== 'undefined') ? s.game.resumeElapsed : 9999;
-            liveClockState.stoppageSeconds = (typeof s.game.stoppageSeconds !== 'undefined') ? s.game.stoppageSeconds : liveClockState.officialSeconds;
-            liveClockState.delaySec = parseInt(liveDelaySlider ? liveDelaySlider.value : (delaySlider ? delaySlider.value : (s.game.broadcastDelay || 0))) || 0;
-            liveClockState.lastSyncTime = Date.now();
+            liveClockState.stoppageSeconds = (typeof s.game.stoppageSeconds !== 'undefined') ? s.game.stoppageSeconds : newOfficialSec;
+
+            // Monotonic clock guard:
+            // Calculate where the browser's local second-by-second ticker is right now
+            const now = Date.now();
+            const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
+            const currentBrowserSec = wasRunning ? Math.max(0, liveClockState.officialSeconds - elapsedSinceSync) : liveClockState.officialSeconds;
+
+            if (isRunning && wasRunning && !periodChanged && !isIntermission && newOfficialSec >= currentBrowserSec) {
+              // API returned a stale/cached timestamp while play was active. Continue ticking smoothly down!
+              liveClockState.officialSeconds = currentBrowserSec;
+              liveClockState.lastSyncTime = now;
+            } else {
+              // Fresh API time, referee whistle/stoppage, period change, or intermission
+              liveClockState.officialSeconds = newOfficialSec;
+              liveClockState.lastSyncTime = now;
+            }
+
+            // Sync delay settings from hardware if user isn't actively adjusting them
+            const userInteracting = (document.activeElement === liveDelaySlider || document.activeElement === delaySlider);
+            if (!userInteracting && (Date.now() - lastUserDelayChange > 3000)) {
+              if (s.game && typeof s.game.broadcastDelay === 'number') {
+                updateDelayDisplays(s.game.broadcastDelay);
+              }
+            } else {
+              liveClockState.delaySec = parseInt(liveDelaySlider ? liveDelaySlider.value : (delaySlider ? delaySlider.value : 0)) || 0;
+            }
 
             updateClientClocks();
 
