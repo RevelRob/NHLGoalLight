@@ -18,7 +18,10 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Goal Light">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-precomposed.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="apple-touch-icon-precomposed" sizes="180x180" href="/apple-touch-icon-precomposed.png">
+
 
   <!-- Android Chrome / PWA Standalone -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -296,7 +299,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     <div class="card">
       <h2>🔄 Firmware & Updates</h2>
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <span style="font-size:0.85rem; color:var(--text-muted)">Current Version: <strong id="curVer" style="color:var(--text)">v1.0.1.1</strong></span>
+        <span style="font-size:0.85rem; color:var(--text-muted)">Current Version: <strong id="curVer" style="color:var(--text)">v1.0.2</strong></span>
         <button id="btnCheckUpdate" style="padding:6px 12px; font-size:0.8rem; background:var(--btn-bg); border:1px solid var(--border); color:var(--text); border-radius:8px; cursor:pointer;">🔍 Check GitHub</button>
       </div>
       <div id="updateInfo" style="display:none; padding:10px; border-radius:8px; background:rgba(46,160,67,0.15); border:1px solid var(--success); margin-bottom:12px; font-size:0.82rem; line-height:1.4;"></div>
@@ -701,10 +704,46 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             let assetUrl = binAsset ? binAsset.browser_download_url : rel.html_url;
             updateInfo.innerHTML = `<strong>✨ Update Available: ${latestTag}</strong><br>` +
               `Release notes: ${rel.body ? rel.body.substring(0, 150) : 'Performance improvements and fixes'}<br><br>` +
-              `<a href="${assetUrl}" target="_blank" style="display:inline-block; padding:6px 12px; background:var(--accent); color:#fff; border-radius:6px; text-decoration:none; font-weight:600; font-size:0.8rem; margin-right:8px;">📥 Download ${binAsset ? binAsset.name : 'firmware.bin'}</a>` +
-              `<a href="${rel.html_url}" target="_blank" style="color:#58a6ff; text-decoration:underline; font-size:0.8rem;">View on GitHub</a><br>` +
-              `<span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-top:6px;">After downloading, select it below under "Manual OTA Firmware Upload" to flash wirelessly!</span>`;
+              `<button type="button" id="btn1ClickUpdate" style="width:100%; padding:10px 14px; background:var(--accent); color:#fff; border:none; border-radius:8px; font-weight:700; font-size:0.88rem; cursor:pointer; margin-bottom:8px; display:flex; align-items:center; justify-content:center; gap:6px;">⚡ 1-Click Direct Install (${latestTag})</button>` +
+              `<span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:10px;">The Goal Light will download directly over Wi-Fi and flash itself. No files saved to your phone!</span>` +
+              `<details style="font-size:0.78rem; color:var(--text-muted);"><summary style="cursor:pointer; color:#58a6ff;">Manual File Download Options</summary><div style="margin-top:8px;">` +
+              `<a href="${assetUrl}" target="_blank" style="display:inline-block; padding:5px 10px; background:var(--btn-bg); border:1px solid var(--border); color:var(--text); border-radius:6px; text-decoration:none; font-size:0.75rem; margin-right:8px;">📥 Download ${binAsset ? binAsset.name : 'firmware.bin'}</a>` +
+              `<a href="${rel.html_url}" target="_blank" style="color:#58a6ff; text-decoration:underline; font-size:0.75rem;">View on GitHub</a>` +
+              `</div></details>`;
+
+            const btn1Click = document.getElementById('btn1ClickUpdate');
+            if (btn1Click) {
+              btn1Click.onclick = () => {
+                if (!confirm(`Install ${latestTag} directly on the Goal Light? It will reboot after installation.`)) return;
+                btn1Click.disabled = true;
+                updateInfo.innerHTML = `<strong>⚡ Installing ${latestTag} directly from Cloud...</strong><br>` +
+                  `<span style="font-size:0.82rem; color:var(--text-muted);">Downloading and writing to flash memory. Please wait about 15 seconds...</span><br><br>` +
+                  `<div style="background:var(--border); border-radius:6px; height:10px; overflow:hidden;"><div id="cloudBar" style="background:var(--accent); height:100%; width:0%; transition:width 15s linear;"></div></div>`;
+                setTimeout(() => {
+                  const cb = document.getElementById('cloudBar');
+                  if (cb) cb.style.width = '100%';
+                }, 100);
+
+                fetch('/api/ota-cloud', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ url: assetUrl })
+                }).then(() => {
+                  let count = 16;
+                  const t = setInterval(() => {
+                    count--;
+                    if (count <= 0) {
+                      clearInterval(t);
+                      window.location.reload();
+                    }
+                  }, 1000);
+                }).catch(err => {
+                  alert('Cloud OTA error: ' + err);
+                });
+              };
+            }
           } else {
+
             updateInfo.style.borderColor = 'var(--success)';
             updateInfo.style.background = 'rgba(46,160,67,0.15)';
             updateInfo.innerHTML = `<strong>✅ Firmware Up to Date (${currentTag})</strong>`;

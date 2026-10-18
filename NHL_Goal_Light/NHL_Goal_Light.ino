@@ -5,6 +5,8 @@
 #include <DNSServer.h>
 #include <Preferences.h>
 #include <Update.h>
+#include <WiFiClientSecure.h>
+#include <HTTPClient.h>
 
 #include "Config.h"
 #include "Teams.h"
@@ -361,31 +363,93 @@ void setupNetwork() {
   }
 }
 
+bool performCloudOta(const String &url) {
+  Serial.printf("[Cloud-OTA] Connecting to: %s\n", url.c_str());
+  WiFiClientSecure client;
+  client.setInsecure();
+
+  HTTPClient http;
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  http.setTimeout(45000);
+
+  if (!http.begin(client, url)) {
+    Serial.println("[Cloud-OTA] HTTP begin failed.");
+    return false;
+  }
+
+  http.setUserAgent("NHL-GoalLight-OTA/" FIRMWARE_VERSION);
+  int httpCode = http.GET();
+  if (httpCode != HTTP_CODE_OK) {
+    Serial.printf("[Cloud-OTA] HTTP GET returned: %d\n", httpCode);
+    http.end();
+    return false;
+  }
+
+  int contentLength = http.getSize();
+  if (contentLength <= 0) {
+    Serial.printf("[Cloud-OTA] Invalid binary size: %d\n", contentLength);
+    http.end();
+    return false;
+  }
+
+  Serial.printf("[Cloud-OTA] Binary size: %d bytes. Flashing partition...\n", contentLength);
+  if (!Update.begin(contentLength)) {
+    Serial.println("[Cloud-OTA] Not enough space for OTA.");
+    Update.printError(Serial);
+    http.end();
+    return false;
+  }
+
+  WiFiClient *stream = http.getStreamPtr();
+  size_t written = Update.writeStream(*stream);
+  if (written != (size_t)contentLength) {
+    Serial.printf("[Cloud-OTA] Stream write mismatch: %u / %d\n", (unsigned int)written, contentLength);
+    Update.printError(Serial);
+    http.end();
+    return false;
+  }
+
+  if (!Update.end(true)) {
+    Serial.println("[Cloud-OTA] Update.end() failed.");
+    Update.printError(Serial);
+    http.end();
+    return false;
+  }
+
+  Serial.println("[Cloud-OTA] Flash successful! Rebooting...");
+  http.end();
+  delay(500);
+  ESP.restart();
+  return true;
+}
+
 void setupWebServer() {
+
   // Main page
   server.on("/", HTTP_GET, []() {
     server.send_P(200, "text/html", INDEX_HTML);
   });
 
-  // App Icon (PNG for iOS Apple Touch Icon & Android PWA)
-  server.on("/icon.png", HTTP_GET, []() {
-    server.sendHeader("Cache-Control", "public, max-age=86400");
+  // Static: App Icons for iOS & Android (GET and HEAD supported)
+  auto sendAppIcon = []() {
+    server.sendHeader("Cache-Control", "public, max-age=604800");
     server.send_P(200, "image/png", (const char*)ICON_192_PNG, sizeof(ICON_192_PNG));
-  });
-  server.on("/apple-touch-icon.png", HTTP_GET, []() {
-    server.sendHeader("Cache-Control", "public, max-age=86400");
-    server.send_P(200, "image/png", (const char*)ICON_192_PNG, sizeof(ICON_192_PNG));
-  });
-  server.on("/favicon.ico", HTTP_GET, []() {
-    server.sendHeader("Cache-Control", "public, max-age=86400");
-    server.send_P(200, "image/png", (const char*)ICON_192_PNG, sizeof(ICON_192_PNG));
-  });
+  };
+  server.on("/icon.png", sendAppIcon);
+  server.on("/apple-touch-icon.png", sendAppIcon);
+  server.on("/apple-touch-icon-precomposed.png", sendAppIcon);
+  server.on("/apple-touch-icon-180x180.png", sendAppIcon);
+  server.on("/apple-touch-icon-180x180-precomposed.png", sendAppIcon);
+  server.on("/apple-touch-icon-120x120.png", sendAppIcon);
+  server.on("/apple-touch-icon-120x120-precomposed.png", sendAppIcon);
+  server.on("/favicon.ico", sendAppIcon);
 
   // Web App Manifest for PWA / Add to Home Screen
-  server.on("/manifest.json", HTTP_GET, []() {
+  server.on("/manifest.json", []() {
     server.sendHeader("Cache-Control", "public, max-age=86400");
     server.send_P(200, "application/manifest+json", PWA_MANIFEST_JSON);
   });
+
 
   // REST API: Wi-Fi Scanner (GET)
   server.on("/api/scan", HTTP_GET, []() {
@@ -587,8 +651,28 @@ void setupWebServer() {
     }
   });
 
+  // REST API: Cloud 1-Click OTA Update
+  server.on("/api/ota-cloud", HTTP_POST, []() {
+    String url = "https://revelrob.github.io/NHLGoalLight/builds/firmware.bin";
+    if (server.hasArg("plain")) {
+      String body = server.arg("plain");
+      int uPos = body.indexOf("\"url\":\"");
+      if (uPos >= 0) {
+        String u = body.substring(uPos + 7, body.indexOf("\"", uPos + 7));
+        u.trim();
+        if (u.length() > 0) url = u;
+      }
+    }
+
+    server.send(200, "application/json", "{\"success\":true,\"message\":\"Cloud OTA started\"}");
+    delay(200);
+
+    performCloudOta(url);
+  });
+
   // Captive portal fallback
   server.onNotFound([]() {
+
     server.sendHeader("Location", "/", true);
     server.send(302, "text/plain", "");
   });
