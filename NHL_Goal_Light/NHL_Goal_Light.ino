@@ -41,6 +41,7 @@ unsigned long scheduledRestartTime = 0;
 
 // TV Broadcast Delay Celebration Queue
 unsigned long pendingGoalCelebrationTime = 0;
+unsigned long pendingOpponentGoalTime = 0;
 
 // =====================================================
 // FORWARD DECLARATIONS
@@ -208,6 +209,9 @@ void loop() {
   // 4. Update LED animations (non-blocking)
   leds.update();
 
+  // 5. Update NHL Game Clock ticker (decrements every 1s when active play is running)
+  nhl.tick();
+
   // Periodic Serial heartbeat so Serial Monitor confirms the device is running
   static unsigned long lastHeartbeat = 0;
   if (now - lastHeartbeat >= 3000) {
@@ -223,13 +227,17 @@ void loop() {
     pendingGoalCelebrationTime = 0;
     triggerGoalCelebration();
   }
+  if (pendingOpponentGoalTime > 0 && now >= pendingOpponentGoalTime) {
+    pendingOpponentGoalTime = 0;
+    triggerOpponentGoal();
+  }
 
-  // 5. If celebrating or in AP mode, skip live polling
+  // 6. If celebrating or in AP mode, skip live polling
   if (isApMode || leds.isCelebrating()) {
     return;
   }
 
-  // 6. Check Wi-Fi reconnection if lost; if lost for > 45s, activate Captive Portal AP
+  // 7. Check Wi-Fi reconnection if lost; if lost for > 45s, activate Captive Portal AP
   static unsigned long disconnectStartTime = 0;
   if (!isApMode) {
     if (WiFi.status() != WL_CONNECTED) {
@@ -249,7 +257,7 @@ void loop() {
     }
   }
 
-  // 7. Poll NHL Web API
+  // 8. Poll NHL Web API
   bool opponentGoal = false;
   bool gameWin = false;
   bool periodStart = false;
@@ -264,7 +272,12 @@ void loop() {
       Serial.printf("[Event] Goal scored! Celebration held for %d sec (TV broadcast synchronisation)...\n", config.broadcast_delay_sec);
     }
   } else if (opponentGoal && config.alert_opponent_goal) {
-    triggerOpponentGoal();
+    if (config.broadcast_delay_sec == 0) {
+      triggerOpponentGoal();
+    } else {
+      pendingOpponentGoalTime = now + (config.broadcast_delay_sec * 1000UL);
+      Serial.printf("[Event] Opponent goal! Alert held for %d sec (TV broadcast synchronisation)...\n", config.broadcast_delay_sec);
+    }
   } else if (gameWin && config.alert_game_win) {
     triggerGameWin();
   } else if (periodStart && config.alert_period_buzzer) {
@@ -1014,9 +1027,16 @@ void setupWebServer() {
     json += "\"awayScore\":" + String(gs.awayScore) + ",";
     json += "\"period\":" + String(gs.period) + ",";
     json += "\"timeRemaining\":\"" + gs.timeRemaining + "\",";
+    json += "\"secondsRemaining\":" + String(gs.secondsRemaining) + ",";
+    json += "\"running\":" + String(gs.clockRunning ? "true" : "false") + ",";
     json += "\"inIntermission\":" + String(gs.inIntermission ? "true" : "false") + ",";
     json += "\"lastPlay\":\"" + gs.lastPlay + "\",";
-    json += "\"broadcastDelay\":" + String(config.broadcast_delay_sec);
+    json += "\"broadcastDelay\":" + String(config.broadcast_delay_sec) + ",";
+    unsigned long stopElapsed = (!gs.clockRunning && gs.lastStoppageMillis > 0) ? ((millis() - gs.lastStoppageMillis) / 1000UL) : 9999;
+    unsigned long resumeElapsed = (gs.clockRunning && gs.lastResumeMillis > 0) ? ((millis() - gs.lastResumeMillis) / 1000UL) : 9999;
+    json += "\"stoppageElapsed\":" + String(stopElapsed) + ",";
+    json += "\"resumeElapsed\":" + String(resumeElapsed) + ",";
+    json += "\"stoppageSeconds\":" + String(gs.stoppageSecondsRemaining);
     json += "},";
     json += "\"upcoming\":{";
     json += "\"valid\":" + String(up.valid ? "true" : "false") + ",";

@@ -1250,7 +1250,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
       <div class="card">
         <h2>🔄 Firmware & Updates</h2>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <span style="font-size:0.85rem; color:var(--text-muted)">Current Version: <strong id="curVer" style="color:var(--text)">v1.1.0.4</strong></span>
+          <span style="font-size:0.85rem; color:var(--text-muted)">Current Version: <strong id="curVer" style="color:var(--text)">v1.1.0.5</strong></span>
           <button type="button" id="btnCheckUpdate" style="padding:6px 12px; font-size:0.8rem; background:var(--btn-bg); border:1px solid var(--border); color:var(--text); border-radius:8px; cursor:pointer;">🔍 Check GitHub</button>
         </div>
         <label class="checkbox-row" style="margin-bottom:12px;">
@@ -1499,71 +1499,127 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     const delaySlider = document.getElementById('delaySlider');
     const delayVal = document.getElementById('delayVal');
 
+    let liveClockState = {
+      active: false,
+      period: 1,
+      officialSeconds: 0,
+      running: false,
+      inIntermission: false,
+      delaySec: 0,
+      stoppageSeconds: 0,
+      stoppageElapsed: 9999,
+      resumeElapsed: 9999,
+      lastSyncTime: Date.now()
+    };
+
+    function parseClockSeconds(str) {
+      if (!str || str === '--:--' || str.toLowerCase().indexOf('intermission') >= 0) return 1200;
+      const parts = str.split(':');
+      if (parts.length === 2) {
+        const m = parseInt(parts[0]) || 0;
+        const s = parseInt(parts[1]) || 0;
+        return (m * 60) + s;
+      }
+      return 1200;
+    }
+
+    function updateClientClocks() {
+      if (!liveClockState.active) return;
+      if (liveClockState.inIntermission) {
+        const offClockEl = document.getElementById('liveOfficialClock');
+        if (offClockEl) offClockEl.textContent = 'Intermission';
+        const syncNhlEl = document.getElementById('syncNhlClock');
+        if (syncNhlEl) syncNhlEl.textContent = 'Intermission';
+        const gameClockEl = document.getElementById('liveGameClock');
+        if (gameClockEl) gameClockEl.textContent = `P${liveClockState.period} Intermission`;
+        const targetEl = document.getElementById('liveTargetTvClock');
+        if (targetEl) targetEl.textContent = 'Intermission';
+        const badgeEl = document.getElementById('liveDelayBadge');
+        if (badgeEl) badgeEl.textContent = '☕ Intermission in Progress';
+        return;
+      }
+
+      const now = Date.now();
+      const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
+
+      // Compute current official clock
+      let curOfficialSec = liveClockState.officialSeconds;
+      if (liveClockState.running) {
+        curOfficialSec = Math.max(0, liveClockState.officialSeconds - elapsedSinceSync);
+      }
+
+      // Format Official Arena Clock: MM:SS
+      const offM = Math.floor(curOfficialSec / 60);
+      const offS = curOfficialSec % 60;
+      const offStr = `${offM}:${offS < 10 ? '0' : ''}${offS}`;
+
+      // Update Official Clock in DOM
+      const offClockEl = document.getElementById('liveOfficialClock');
+      if (offClockEl) offClockEl.textContent = offStr;
+      const syncNhlEl = document.getElementById('syncNhlClock');
+      if (syncNhlEl) syncNhlEl.textContent = offStr;
+      const gameClockEl = document.getElementById('liveGameClock');
+      if (gameClockEl) gameClockEl.textContent = `P${liveClockState.period} ${offStr}`;
+
+      // Compute Target TV Clock with Delay D
+      const D = liveClockState.delaySec;
+      let targetSec = curOfficialSec;
+      let badgeText = '';
+
+      if (D <= 0) {
+        targetSec = curOfficialSec;
+        badgeText = 'Delay: 0s (Instantaneous)';
+      } else if (!liveClockState.running) {
+        // STOPPAGE IN PLAY
+        const totalStopElapsed = liveClockState.stoppageElapsed + elapsedSinceSync;
+        if (totalStopElapsed >= D) {
+          // Stoppage lasted longer than delay buffer -> TV has caught up!
+          targetSec = curOfficialSec;
+          badgeText = '⏸ Stoppage (TV Caught Up)';
+        } else {
+          // TV is still counting down towards the stoppage time
+          targetSec = curOfficialSec + (D - totalStopElapsed);
+          const catchupLeft = D - totalStopElapsed;
+          badgeText = `⏳ TV Catching Up (${catchupLeft}s left)`;
+        }
+      } else {
+        // PLAY IS ACTIVE / RUNNING
+        const totalResumeElapsed = liveClockState.resumeElapsed + elapsedSinceSync;
+        if (totalResumeElapsed < D) {
+          // Puck dropped in arena, but not yet on TV! TV stays frozen at stoppage time
+          targetSec = (liveClockState.stoppageSeconds > 0) ? liveClockState.stoppageSeconds : (curOfficialSec + totalResumeElapsed);
+          const dropLeft = D - totalResumeElapsed;
+          badgeText = `⏳ Puck Dropped (TV in ${dropLeft}s)`;
+        } else {
+          // Normal running play: TV is D seconds behind arena
+          targetSec = curOfficialSec + D;
+          badgeText = `Delay: ${D}s Buffer`;
+        }
+      }
+
+      // Cap at max period seconds (20 min regulation, 5 min OT)
+      const maxSec = (liveClockState.period > 3) ? 300 : 1200;
+      if (targetSec > maxSec) targetSec = maxSec;
+
+      const tvM = Math.floor(targetSec / 60);
+      const tvS = targetSec % 60;
+      const tvStr = `${tvM}:${tvS < 10 ? '0' : ''}${tvS}`;
+
+      const targetEl = document.getElementById('liveTargetTvClock');
+      if (targetEl) targetEl.textContent = tvStr;
+
+      const badgeEl = document.getElementById('liveDelayBadge');
+      if (badgeEl) badgeEl.textContent = badgeText;
+    }
+
     function updateDelayDisplays(v) {
       const txt = (v === 0) ? '0s (Instantaneous)' : v + 's delay';
       if (liveDelayVal) liveDelayVal.textContent = txt;
       if (delayVal) delayVal.textContent = txt;
       if (liveDelaySlider) liveDelaySlider.value = v;
       if (delaySlider) delaySlider.value = v;
-      const badge = document.getElementById('liveDelayBadge');
-      if (badge) badge.textContent = `Delay: ${v}s Buffer`;
-    }
-
-    function sendQuickDelay(v) {
-      updateDelayDisplays(v);
-      fetch('/api/quick-set', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ broadcastDelay: v })
-      }).catch(console.error);
-    }
-
-    if (liveDelaySlider) {
-      liveDelaySlider.oninput = () => updateDelayDisplays(parseInt(liveDelaySlider.value) || 0);
-      liveDelaySlider.onchange = () => sendQuickDelay(parseInt(liveDelaySlider.value) || 0);
-    }
-    if (delaySlider) {
-      delaySlider.oninput = () => updateDelayDisplays(parseInt(delaySlider.value) || 0);
-      delaySlider.onchange = () => sendQuickDelay(parseInt(delaySlider.value) || 0);
-    }
-
-    window.quickSetPreset = (sec) => {
-      sendQuickDelay(sec);
-    };
-
-    window.setBroadcastPreset = (sec) => {
-      sendQuickDelay(sec);
-    };
-
-    window.quickNudgeDelay = (delta) => {
-      let v = (parseInt(liveDelaySlider ? liveDelaySlider.value : delaySlider.value) || 0) + delta;
-      if (v < 0) v = 0;
-      if (v > 120) v = 120;
-      sendQuickDelay(v);
-    };
-
-    window.nudgeDelay = (delta) => {
-      window.quickNudgeDelay(delta);
-    };
-
-    function formatGameClock(officialTimeStr, period, delaySec) {
-      if (!officialTimeStr || officialTimeStr === '--:--' || officialTimeStr.toLowerCase().indexOf('final') >= 0) {
-        return officialTimeStr || '--:--';
-      }
-      const parts = officialTimeStr.split(':');
-      if (parts.length === 2) {
-        const mins = parseInt(parts[0]);
-        const secs = parseInt(parts[1]);
-        if (!isNaN(mins) && !isNaN(secs)) {
-          let totalSec = (mins * 60) + secs + delaySec;
-          const maxSec = (period > 3) ? 300 : 1200;
-          if (totalSec > maxSec) totalSec = maxSec;
-          const tMins = Math.floor(totalSec / 60);
-          const tSecs = totalSec % 60;
-          return `${tMins}:${tSecs < 10 ? '0' : ''}${tSecs}`;
-        }
-      }
-      return officialTimeStr;
+      liveClockState.delaySec = v;
+      updateClientClocks();
     }
 
     // Expandable Visualiser Drawers
@@ -2054,31 +2110,37 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             document.getElementById('liveHomeTeam').textContent = s.game.homeAbbrev || 'HME';
             document.getElementById('liveHomeScore').textContent = s.game.homeScore;
 
-            const clockText = s.game.timeRemaining ? `P${s.game.period} ${s.game.timeRemaining}` : `Period ${s.game.period}`;
-            document.getElementById('liveGameClock').textContent = clockText;
-            document.getElementById('syncNhlClock').textContent = s.game.timeRemaining || 'In Progress';
-            document.getElementById('syncNhlPeriod').textContent = `Period ${s.game.period}`;
-
             // Sync Card on Live Tab
             const lastPlayEl = document.getElementById('liveLastPlay');
             if (lastPlayEl) {
               lastPlayEl.textContent = s.game.lastPlay || '⏳ Waiting for live game action / puck drop...';
             }
-            const offClockEl = document.getElementById('liveOfficialClock');
-            if (offClockEl) offClockEl.textContent = s.game.timeRemaining || 'In Progress';
             const offPerEl = document.getElementById('liveOfficialPeriod');
             if (offPerEl) offPerEl.textContent = `Period ${s.game.period}`;
+            const syncNhlPer = document.getElementById('syncNhlPeriod');
+            if (syncNhlPer) syncNhlPer.textContent = `Period ${s.game.period}`;
 
-            const curDelay = parseInt(liveDelaySlider ? liveDelaySlider.value : delaySlider.value) || 0;
-            const targetTv = formatGameClock(s.game.timeRemaining, s.game.period, curDelay);
-            const targetEl = document.getElementById('liveTargetTvClock');
-            if (targetEl) targetEl.textContent = targetTv;
+            // Synchronise client clock timeline engine with ESP32 status
+            liveClockState.active = true;
+            liveClockState.period = s.game.period || 1;
+            liveClockState.officialSeconds = (typeof s.game.secondsRemaining !== 'undefined' && s.game.secondsRemaining >= 0) ? s.game.secondsRemaining : parseClockSeconds(s.game.timeRemaining);
+            liveClockState.running = !!s.game.running;
+            liveClockState.inIntermission = !!s.game.inIntermission;
+            liveClockState.stoppageElapsed = (typeof s.game.stoppageElapsed !== 'undefined') ? s.game.stoppageElapsed : 9999;
+            liveClockState.resumeElapsed = (typeof s.game.resumeElapsed !== 'undefined') ? s.game.resumeElapsed : 9999;
+            liveClockState.stoppageSeconds = (typeof s.game.stoppageSeconds !== 'undefined') ? s.game.stoppageSeconds : liveClockState.officialSeconds;
+            liveClockState.delaySec = parseInt(liveDelaySlider ? liveDelaySlider.value : (delaySlider ? delaySlider.value : (s.game.broadcastDelay || 0))) || 0;
+            liveClockState.lastSyncTime = Date.now();
+
+            updateClientClocks();
 
             const interm = !!s.game.inIntermission;
             document.getElementById('liveIntermissionNote').style.display = interm ? 'inline' : 'none';
-            document.getElementById('liveStatusSubtext').textContent = interm ? 'Intermission in progress.' : 'Live game active.';
+            document.getElementById('liveStatusSubtext').textContent = interm ? 'Intermission in progress.' : (s.game.running ? 'Live play in progress.' : 'Play stopped by whistle.');
             if (cardLive) cardLive.style.display = 'block';
           } else if (s.system && s.system.connected) {
+            liveClockState.active = false;
+            liveClockState.running = false;
             badge.className = 'badge';
             badge.textContent = `Online (${s.system.team})`;
             document.getElementById('liveGameClock').textContent = 'No Live Game';
@@ -2095,6 +2157,8 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
             document.getElementById('liveIntermissionNote').style.display = 'none';
             document.getElementById('liveStatusSubtext').textContent = 'No game currently in progress.';
           } else {
+            liveClockState.active = false;
+            liveClockState.running = false;
             badge.className = 'badge';
             badge.textContent = 'AP Setup Mode (192.168.4.1)';
             document.getElementById('liveGameClock').textContent = 'Setup Mode';
@@ -2183,7 +2247,8 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
           }
         }).catch(() => {});
     }
-    setInterval(refreshStatus, 4000);
+    setInterval(updateClientClocks, 1000);
+    setInterval(refreshStatus, 2500);
     refreshStatus();
 
     // Live update mDNS label as user types device name
