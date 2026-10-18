@@ -1,7 +1,7 @@
 #pragma once
 #include <Arduino.h>
 
-#define FIRMWARE_VERSION     "1.1.0.7-beta"
+#define FIRMWARE_VERSION     "1.1.0.8-beta"
 #define GITHUB_REPO          "RevelRob/NHLGoalLight"
 
 // =====================================================

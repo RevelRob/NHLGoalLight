@@ -450,6 +450,9 @@ void setupNetwork() {
       Serial.print("[Network] IP Address: ");
       Serial.println(WiFi.localIP());
 
+      // Synchronise system time via NTP (UTC)
+      configTime(0, 0, "pool.ntp.org", "time.google.com");
+
       isApMode = false;
 
       if (MDNS.begin(hostSlug)) {
@@ -1034,9 +1037,17 @@ void setupWebServer() {
     json += "\"broadcastDelay\":" + String(config.broadcast_delay_sec) + ",";
     unsigned long stopElapsed = (!gs.clockRunning && gs.lastStoppageMillis > 0) ? ((millis() - gs.lastStoppageMillis) / 1000UL) : 9999;
     unsigned long resumeElapsed = (gs.clockRunning && gs.lastResumeMillis > 0) ? ((millis() - gs.lastResumeMillis) / 1000UL) : 9999;
+    unsigned long playElapsed = (gs.lastPlayMillis > 0) ? ((millis() - gs.lastPlayMillis) / 1000UL) : 0;
+    String safeApiDate = gs.apiServerDate;
+    safeApiDate.replace("\"", "");
     json += "\"stoppageElapsed\":" + String(stopElapsed) + ",";
     json += "\"resumeElapsed\":" + String(resumeElapsed) + ",";
-    json += "\"stoppageSeconds\":" + String(gs.stoppageSecondsRemaining);
+    json += "\"stoppageSeconds\":" + String(gs.stoppageSecondsRemaining) + ",";
+    json += "\"lastPlayElapsed\":" + String(playElapsed) + ",";
+    json += "\"lastPlayEpoch\":" + String(gs.lastPlayEpoch) + ",";
+    json += "\"espEpoch\":" + String((unsigned long)time(nullptr)) + ",";
+    json += "\"apiDate\":\"" + safeApiDate + "\",";
+    json += "\"apiAge\":" + String(gs.apiCacheAge);
     json += "},";
     json += "\"upcoming\":{";
     json += "\"valid\":" + String(up.valid ? "true" : "false") + ",";

@@ -27,6 +27,11 @@ struct GameStatus {
   bool inIntermission;
   String situationCode;
   String lastPlay;
+  unsigned long lastPlayMillis;
+  unsigned long lastPlayEpoch;
+  unsigned long lastPollEpoch;
+  String apiServerDate;
+  int apiCacheAge;
   unsigned long lastStoppageMillis;
   unsigned long lastResumeMillis;
   int stoppageSecondsRemaining;
@@ -78,6 +83,12 @@ public:
     currentStatus.secondsRemaining = 1200;
     currentStatus.clockRunning = false;
     currentStatus.inIntermission = false;
+    currentStatus.lastPlay = "";
+    currentStatus.lastPlayMillis = 0;
+    currentStatus.lastPlayEpoch = 0;
+    currentStatus.lastPollEpoch = 0;
+    currentStatus.apiServerDate = "";
+    currentStatus.apiCacheAge = 0;
     currentStatus.lastStoppageMillis = 0;
     currentStatus.lastResumeMillis = 0;
     currentStatus.stoppageSecondsRemaining = 1200;
@@ -99,6 +110,12 @@ public:
     currentStatus.secondsRemaining = 1200;
     currentStatus.clockRunning = false;
     currentStatus.inIntermission = false;
+    currentStatus.lastPlay = "";
+    currentStatus.lastPlayMillis = 0;
+    currentStatus.lastPlayEpoch = 0;
+    currentStatus.lastPollEpoch = 0;
+    currentStatus.apiServerDate = "";
+    currentStatus.apiCacheAge = 0;
     currentStatus.lastStoppageMillis = 0;
     currentStatus.lastResumeMillis = 0;
     currentStatus.stoppageSecondsRemaining = 1200;
@@ -438,12 +455,23 @@ private:
     http.setUserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko)");
     http.setTimeout(8000);
 
+    const char *headerKeys[] = {"Date", "Age"};
+    http.collectHeaders(headerKeys, 2);
+
     int code = http.GET();
     if (code != 200) {
       Serial.printf("[NHL] play-by-play error %d, falling back to landing\n", code);
       http.end();
       return pollLandingFallback(outOpponentGoal, outGameWin, outPeriodStart);
     }
+
+    if (http.hasHeader("Date")) {
+      currentStatus.apiServerDate = http.header("Date");
+    }
+    if (http.hasHeader("Age")) {
+      currentStatus.apiCacheAge = http.header("Age").toInt();
+    }
+    currentStatus.lastPollEpoch = (unsigned long)time(nullptr);
 
     WiFiClient *stream = http.getStreamPtr();
     String headBlock = "";
@@ -521,6 +549,8 @@ private:
         // Monotonic guard: If play has been running and API returns stale cached seconds, do not rewind
         if (running && currentStatus.clockRunning && !interm && sec >= currentStatus.secondsRemaining) {
           // Keep local smooth ticker
+        } else if (!running && currentStatus.clockRunning && !interm && sec > currentStatus.secondsRemaining) {
+          // Play just stopped (whistle), preserve local ticker's lower seconds to avoid backward jumps from stale CDN responses
         } else {
           currentStatus.secondsRemaining = sec;
         }
@@ -573,9 +603,18 @@ private:
     int lastPlayStart = playsEnd.lastIndexOf("{\"eventId\":");
     if (lastPlayStart >= 0) {
       String playObj = playsEnd.substring(lastPlayStart);
-      currentStatus.lastPlay = formatPlayObject(playObj, homeId, awayId);
+      String newPlay = formatPlayObject(playObj, homeId, awayId);
+      if (newPlay != currentStatus.lastPlay) {
+        currentStatus.lastPlay = newPlay;
+        currentStatus.lastPlayMillis = millis();
+        currentStatus.lastPlayEpoch = (unsigned long)time(nullptr);
+      }
     } else if (currentStatus.state == STATE_LIVE) {
-      currentStatus.lastPlay = "P" + String(currentStatus.period) + " " + currentStatus.timeRemaining + " - Live Play in Progress";
+      if (currentStatus.lastPlay.length() == 0) {
+        currentStatus.lastPlay = "P" + String(currentStatus.period) + " " + currentStatus.timeRemaining + " - Live Play in Progress";
+        currentStatus.lastPlayMillis = millis();
+        currentStatus.lastPlayEpoch = (unsigned long)time(nullptr);
+      }
     } else if (currentStatus.state == STATE_FINAL) {
       currentStatus.lastPlay = "Game Final: " + currentStatus.awayAbbrev + " " + String(currentStatus.awayScore) + " - " + currentStatus.homeAbbrev + " " + String(currentStatus.homeScore);
     } else if (currentStatus.state == STATE_PREGAME) {
@@ -629,12 +668,23 @@ private:
     http.setUserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko)");
     http.setTimeout(8000);
 
+    const char *headerKeys[] = {"Date", "Age"};
+    http.collectHeaders(headerKeys, 2);
+
     int code = http.GET();
     if (code != 200) {
       Serial.printf("[NHL] Landing HTTP error: %d\n", code);
       http.end();
       return false;
     }
+
+    if (http.hasHeader("Date")) {
+      currentStatus.apiServerDate = http.header("Date");
+    }
+    if (http.hasHeader("Age")) {
+      currentStatus.apiCacheAge = http.header("Age").toInt();
+    }
+    currentStatus.lastPollEpoch = (unsigned long)time(nullptr);
 
     String payload = http.getString();
     http.end();
@@ -665,6 +715,8 @@ private:
         // Monotonic guard: If play has been running and API returns stale cached seconds, do not rewind
         if (running && currentStatus.clockRunning && !interm && sec >= currentStatus.secondsRemaining) {
           // Keep local smooth ticker
+        } else if (!running && currentStatus.clockRunning && !interm && sec > currentStatus.secondsRemaining) {
+          // Play just stopped (whistle), preserve local ticker's lower seconds to avoid backward jumps
         } else {
           currentStatus.secondsRemaining = sec;
         }
