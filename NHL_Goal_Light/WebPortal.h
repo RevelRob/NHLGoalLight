@@ -622,6 +622,10 @@ box-shadow: 0 12px 36px rgba(0,0,0,0.6);
 </div>
 <div id="liveTvMatchResult" style="font-size:0.75rem; text-align:center; margin-top:4px; min-height:16px;"></div>
 </div>
+<button type="button" id="btnWhistleSyncLive" class="primary" style="margin-top:8px; margin-bottom:4px; width:100%; padding:10px 14px; font-size:0.88rem; font-weight:700; border-radius:8px; background:linear-gradient(135deg, #1f6feb 0%, #1158c7 100%); border:1px solid #388bfd; cursor:pointer;" onclick="syncToWhistleNow()">
+🔔 I See a Whistle on TV Right Now! (<span class="whistleElapsedTxt">0s</span>)
+</button>
+<div class="helper-text" style="margin-bottom:10px; text-align:center;">One-tap sync: tap the second you see or hear a whistle on your TV!</div>
 <label style="margin-top:8px;">Quick Broadcaster Presets:</label>
 <div class="preset-row">
 <button type="button" class="preset-btn" onclick="quickSetPreset(0)">⚡ Cable / OTA (0s)</button>
@@ -1048,6 +1052,10 @@ box-shadow: 0 12px 36px rgba(0,0,0,0.6);
 <button type="button" id="btnApplyTvMatch" class="primary" style="padding:9px 16px; font-weight:700; border-radius:8px;" onclick="applyTvScoreboardMatch('sync')">🎯 Match TV</button>
 </div>
 <div id="tvMatchResult" style="font-size:0.78rem; text-align:center; min-height:18px;"></div>
+<button type="button" id="btnWhistleSyncTab4" class="primary" style="margin-top:10px; width:100%; padding:10px 14px; font-size:0.88rem; font-weight:700; border-radius:8px; background:linear-gradient(135deg, #1f6feb 0%, #1158c7 100%); border:1px solid #388bfd; cursor:pointer;" onclick="syncToWhistleNow()">
+🔔 I See a Whistle on TV Right Now! (<span class="whistleElapsedTxt">0s</span>)
+</button>
+<div class="helper-text" style="margin-top:4px; text-align:center;">One-tap sync: tap the second you see or hear a whistle on your TV!</div>
 </div>
 <div class="last-play-box" style="margin-bottom:4px;">
 <div class="last-play-title">
@@ -1085,6 +1093,9 @@ box-shadow: 0 12px 36px rgba(0,0,0,0.6);
 <div style="color:var(--text-muted); font-size:0.7rem; text-transform:uppercase;">Last Play Latency</div>
 <div id="diagPlayLag" style="font-weight:700; color:#58a6ff; margin-top:2px;">-- s ago</div>
 </div>
+<button type="button" class="btn-subtle" style="margin-top:12px; width:100%; padding:9px 12px; font-size:0.8rem; font-weight:600; border-radius:6px; background:#161b22; border:1px solid var(--border); color:var(--text); cursor:pointer;" onclick="copyLiveFeedDebug()">
+📋 Copy Live Feed Data (JSON) to Clipboard
+</button>
 </div>
 </div>
 </div>
@@ -1419,6 +1430,10 @@ return 0;
 }
 function updateClientClocks() {
 if (!liveClockState.active) return;
+const now = Date.now();
+const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
+const D = liveClockState.delaySec;
+
 if (liveClockState.inIntermission) {
 const offClockEl = document.getElementById('liveOfficialClock');
 const syncNhlEl = document.getElementById('syncNhlClock');
@@ -1431,19 +1446,18 @@ let intermText = 'Intermission';
 let targetIntermText = 'Intermission';
 let badgeDetail = '☕ Intermission in Progress';
 if (liveClockState.officialSeconds > 0) {
-const now = Date.now();
-const elapsed = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
-const remSec = Math.max(0, liveClockState.officialSeconds - elapsed);
+const remSec = Math.max(0, liveClockState.officialSeconds - elapsedSinceSync);
 const iM = Math.floor(remSec / 60);
 const iS = remSec % 60;
 const iStr = `${iM}:${iS < 10 ? '0' : ''}${iS}`;
 intermText = `INT ${iStr}`;
-const targetRemSec = remSec + liveClockState.delaySec;
+const targetRemSec = remSec + D;
 const tM = Math.floor(targetRemSec / 60);
 const tS = targetRemSec % 60;
-targetIntermText = `INT ${tM}:${tS < 10 ? '0' : ''}${tS}`;
+const tStr = `${tM}:${tS < 10 ? '0' : ''}${tS}`;
+targetIntermText = `INT ${tStr}`;
 badgeDetail = `☕ Intermission (${iStr} remaining)`;
-if (gameClockEl) gameClockEl.textContent = `P${liveClockState.period} Intermission (${iStr})`;
+if (gameClockEl) gameClockEl.textContent = (D > 0) ? `P${liveClockState.period} INT (${tStr})` : `P${liveClockState.period} INT (${iStr})`;
 } else {
 if (gameClockEl) gameClockEl.textContent = `P${liveClockState.period} Intermission`;
 }
@@ -1455,8 +1469,7 @@ if (badgeEl) badgeEl.textContent = badgeDetail;
 if (syncBadgeEl) syncBadgeEl.textContent = badgeDetail;
 return;
 }
-const now = Date.now();
-const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
+
 // Compute current official clock
 let curOfficialSec = liveClockState.officialSeconds;
 if (liveClockState.running) {
@@ -1471,33 +1484,69 @@ const offClockEl = document.getElementById('liveOfficialClock');
 if (offClockEl) offClockEl.textContent = offStr;
 const syncNhlEl = document.getElementById('syncNhlClock');
 if (syncNhlEl) syncNhlEl.textContent = offStr;
-const gameClockEl = document.getElementById('liveGameClock');
-if (gameClockEl) gameClockEl.textContent = `P${liveClockState.period} ${offStr}`;
-// Compute Target TV Clock with Delay D
-const D = liveClockState.delaySec;
-// Target TV Clock must ALWAYS respond directly to delay slider D (no dead zones, no freezing)
-let targetSec = curOfficialSec + D;
+
+// VIDEO-BUFFER DELAY STATE MACHINE FOR TARGET TV CLOCK:
+const stopElapsed = (typeof liveClockState.stoppageElapsed === 'number') ? (liveClockState.stoppageElapsed + elapsedSinceSync) : 9999;
+const resumeElapsed = (typeof liveClockState.resumeElapsed === 'number') ? (liveClockState.resumeElapsed + elapsedSinceSync) : 9999;
+const stopSec = (typeof liveClockState.stoppageSeconds === 'number' && liveClockState.stoppageSeconds >= 0) ? liveClockState.stoppageSeconds : curOfficialSec;
+
+let targetSec = curOfficialSec;
+let tvStatusSub = '';
+if (D <= 0) {
+targetSec = curOfficialSec;
+tvStatusSub = '⚡ Delay: 0s (Instantaneous)';
+} else if (!liveClockState.running) {
+// Arena is currently STOPPED at whistle time stopSec
+if (stopElapsed < D) {
+// Whistle blew at arena, but play is STILL COUNTING DOWN on TV!
+targetSec = stopSec + (D - stopElapsed);
+tvStatusSub = `⏳ Whistle in ${D - stopElapsed}s on TV • Delay: ${D}s`;
+} else {
+// Whistle has reached TV! TV clock is frozen at whistle time
+targetSec = stopSec;
+tvStatusSub = `⏸️ TV Stopped by Whistle • Delay: ${D}s`;
+}
+} else {
+// Arena is currently RUNNING
+if (resumeElapsed < D) {
+// Puck dropped at arena, but TV is STILL STOPPED in commercial / pre-faceoff!
+targetSec = stopSec;
+tvStatusSub = `⏳ Faceoff in ${D - resumeElapsed}s on TV • Delay: ${D}s`;
+} else {
+// Puck has dropped on TV! Active play on TV
+targetSec = curOfficialSec + D;
+tvStatusSub = `🟢 Active TV Play • Delay: ${D}s`;
+}
+}
+
 const maxSec = (liveClockState.period > 3) ? 300 : 1200;
 if (targetSec > maxSec) targetSec = maxSec;
+if (targetSec < 0) targetSec = 0;
+
 const tvM = Math.floor(targetSec / 60);
 const tvS = targetSec % 60;
 const tvStr = `${tvM}:${tvS < 10 ? '0' : ''}${tvS}`;
+
 const targetEl = document.getElementById('liveTargetTvClock');
 if (targetEl) targetEl.textContent = tvStr;
 const syncTargetEl = document.getElementById('syncTargetClock');
 if (syncTargetEl) syncTargetEl.textContent = tvStr;
-let badgeText = '';
-if (D <= 0) {
-badgeText = '⚡ Delay: 0s (Instantaneous)';
-} else if (!liveClockState.running) {
-badgeText = `⏸️ Stoppage • Delay: ${D}s Buffer`;
-} else {
-badgeText = `🟢 Active Play • Delay: ${D}s Buffer`;
-}
+
+// Main scoreboard pill: shows target TV clock when delay buffer D > 0
+const gameClockEl = document.getElementById('liveGameClock');
+if (gameClockEl) gameClockEl.textContent = (D > 0) ? `P${liveClockState.period} ${tvStr}` : `P${liveClockState.period} ${offStr}`;
+
 const badgeEl = document.getElementById('liveDelayBadge');
-if (badgeEl) badgeEl.textContent = badgeText;
+if (badgeEl) badgeEl.textContent = tvStatusSub;
 const syncBadgeEl = document.getElementById('syncDelayBadge');
-if (syncBadgeEl) syncBadgeEl.textContent = badgeText;
+if (syncBadgeEl) syncBadgeEl.textContent = tvStatusSub;
+
+// Update live whistle sync button label
+const whistleSecVal = Math.min(120, Math.max(0, stopElapsed));
+document.querySelectorAll('.whistleElapsedTxt').forEach(el => {
+el.textContent = `${whistleSecVal}s`;
+});
+
 // Update play elapsed timer and sync button labels
 if (lastPlayTracker.detectedTime > 0) {
 const playElapsed = Math.max(0, Math.floor((now - lastPlayTracker.detectedTime) / 1000));
@@ -1587,32 +1636,82 @@ const targetDelay = Math.min(120, Math.max(0, playElapsed));
 sendQuickDelay(targetDelay);
 showToast(`🎯 Broadcast delay set to ${targetDelay}s (matches last arena event)!`);
 };
+window.syncToWhistleNow = function() {
+const now = Date.now();
+const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
+const stopElapsed = (typeof liveClockState.stoppageElapsed === 'number') ? (liveClockState.stoppageElapsed + elapsedSinceSync) : 9999;
+if (liveClockState.running && liveClockState.resumeElapsed > 20) {
+showToast('⚠️ Play is currently active at the arena. Wait for the next whistle on TV to sync!');
+return;
+}
+const targetDelay = Math.min(120, Math.max(0, stopElapsed));
+sendQuickDelay(targetDelay);
+showToast(`🔔 Whistle matched! Broadcast delay set to ${targetDelay}s.`);
+};
+window.copyLiveFeedDebug = function() {
+fetch('/api/status')
+.then(r => r.json())
+.then(data => {
+const txt = JSON.stringify(data, null, 2);
+navigator.clipboard.writeText(txt).then(() => {
+showToast('📋 Live feed JSON copied to clipboard!');
+}).catch(() => {
+showToast('📋 Copy complete (check console if clipboard blocked).');
+console.log('Live Feed Diagnostics:', txt);
+});
+})
+.catch(() => showToast('⚠️ Failed to fetch feed status.'));
+};
 window.applyTvScoreboardMatch = function(source) {
 const isLive = (source === 'live');
 const minIn = document.getElementById(isLive ? 'liveTvMin' : 'tvMatchMinutes');
 const secIn = document.getElementById(isLive ? 'liveTvSec' : 'tvMatchSeconds');
 const resEl = document.getElementById(isLive ? 'liveTvMatchResult' : 'tvMatchResult');
 if (!minIn || !secIn) return;
-const m = parseInt(minIn.value) || 0;
-const s = parseInt(secIn.value) || 0;
+const m = parseInt(minIn.value);
+const s = parseInt(secIn.value);
+if (isNaN(m) || isNaN(s) || m < 0 || s < 0 || s > 59) {
+if (resEl) resEl.innerHTML = '<span style="color:#f87171;">⚠️ Please enter valid MM (0-20) and SS (0-59).</span>';
+return;
+}
 const tvTotalSec = (m * 60) + s;
+const now = Date.now();
+const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
 let curOfficial = liveClockState.officialSeconds;
 if (liveClockState.running) {
-const elapsed = Math.max(0, Math.floor((Date.now() - liveClockState.lastSyncTime) / 1000));
-curOfficial = Math.max(0, curOfficial - elapsed);
+curOfficial = Math.max(0, curOfficial - elapsedSinceSync);
 }
-const diffSec = tvTotalSec - curOfficial;
-if (diffSec < 0) {
-if (resEl) resEl.innerHTML = `<span style="color:#f87171;">⚠️ TV clock (${m}:${s < 10 ? '0' : ''}${s}) is ahead of official clock! Broadcast feeds are delayed behind arena.</span>`;
+const stopSec = (typeof liveClockState.stoppageSeconds === 'number' && liveClockState.stoppageSeconds >= 0) ? liveClockState.stoppageSeconds : curOfficial;
+const stopElapsed = (typeof liveClockState.stoppageElapsed === 'number') ? (liveClockState.stoppageElapsed + elapsedSinceSync) : 9999;
+
+let calculatedDelay = 0;
+if (!liveClockState.running) {
+if (tvTotalSec === stopSec) {
+if (resEl) resEl.innerHTML = `<span style="color:#eab308;">ℹ️ Play is currently stopped at ${m}:${s < 10 ? '0' : ''}${s} on both arena and TV.<br>Tap <strong>"🔔 I See a Whistle on TV Right Now!"</strong> to sync immediately!</span>`;
+return;
+} else if (tvTotalSec > stopSec) {
+// Play stopped at arena, but TV is still counting down towards the whistle
+calculatedDelay = stopElapsed + (tvTotalSec - stopSec);
+} else {
+if (resEl) resEl.innerHTML = `<span style="color:#f87171;">⚠️ TV clock (${m}:${s < 10 ? '0' : ''}${s}) is ahead of arena stoppage (${Math.floor(stopSec/60)}:${stopSec%60 < 10 ? '0' : ''}${stopSec})!</span>`;
 return;
 }
-if (diffSec > 120) {
-if (resEl) resEl.innerHTML = `<span style="color:#f87171;">⚠️ Calculated delay (${diffSec}s) exceeds maximum 120s buffer. Please check period or time entered.</span>`;
+} else {
+calculatedDelay = tvTotalSec - curOfficial;
+}
+
+if (calculatedDelay < 0) {
+if (resEl) resEl.innerHTML = `<span style="color:#f87171;">⚠️ TV clock is ahead of official arena clock! Broadcast feeds are delayed behind the arena.</span>`;
 return;
 }
-sendQuickDelay(diffSec);
-if (resEl) resEl.innerHTML = `<span style="color:#4ade80;">🎯 TV is ${diffSec}s behind official clock. Delay buffer set to ${diffSec}s!</span>`;
-showToast(`🎯 Synchronised! Broadcast delay set to ${diffSec}s.`);
+if (calculatedDelay > 120) {
+if (resEl) resEl.innerHTML = `<span style="color:#f87171;">⚠️ Calculated delay (${calculatedDelay}s) exceeds maximum 120s buffer. Please check period or time entered.</span>`;
+return;
+}
+
+sendQuickDelay(calculatedDelay);
+if (resEl) resEl.innerHTML = `<span style="color:#4ade80;">🎯 TV is ${calculatedDelay}s behind arena clock. Broadcast delay set to ${calculatedDelay}s!</span>`;
+showToast(`🎯 Synchronised! Broadcast delay set to ${calculatedDelay}s.`);
 };
 let lastUserDelayChange = 0;
 function updateDelayDisplays(v) {
@@ -2159,39 +2258,47 @@ const newOfficialSec = (typeof s.game.secondsRemaining !== 'undefined' && s.game
 const isRunning = !!s.game.running;
 const wasRunning = liveClockState.running;
 const isIntermission = !!s.game.inIntermission;
+const wasIntermission = !!liveClockState.inIntermission;
 liveClockState.inIntermission = isIntermission;
 liveClockState.running = isRunning;
 liveClockState.stoppageElapsed = (typeof s.game.stoppageElapsed !== 'undefined') ? s.game.stoppageElapsed : 9999;
 liveClockState.resumeElapsed = (typeof s.game.resumeElapsed !== 'undefined') ? s.game.resumeElapsed : 9999;
 liveClockState.stoppageSeconds = (typeof s.game.stoppageSeconds !== 'undefined') ? s.game.stoppageSeconds : newOfficialSec;
-// Monotonic clock guard:
-// Calculate where the browser's local second-by-second ticker is right now
+
 const now = Date.now();
 const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
 const currentBrowserSec = wasRunning ? Math.max(0, liveClockState.officialSeconds - elapsedSinceSync) : liveClockState.officialSeconds;
-if (isRunning && wasRunning && !periodChanged && !isIntermission) {
-if (newOfficialSec < currentBrowserSec) {
-// The API feed has advanced with fresh arena time: update anchor
-liveClockState.officialSeconds = newOfficialSec;
-liveClockState.lastSyncTime = now;
+
+if (periodChanged || (isIntermission !== wasIntermission)) {
+  // Period transition or entered/exited intermission: snap anchor
+  liveClockState.officialSeconds = newOfficialSec;
+  liveClockState.lastSyncTime = now;
+} else if (isIntermission) {
+  // During intermission: local timer ticks down smoothly 1 sec/sec
+  // Only resync anchor if API differs by more than 3 seconds
+  const currentIntermSec = Math.max(0, liveClockState.officialSeconds - elapsedSinceSync);
+  if (Math.abs(newOfficialSec - currentIntermSec) > 3) {
+    liveClockState.officialSeconds = newOfficialSec;
+    liveClockState.lastSyncTime = now;
+  }
+} else if (!isRunning) {
+  // Arena is stopped by whistle: stay firmly locked at stoppage seconds
+  const stopSec = (typeof s.game.stoppageSeconds === 'number' && s.game.stoppageSeconds >= 0) ? s.game.stoppageSeconds : newOfficialSec;
+  liveClockState.officialSeconds = stopSec;
+  liveClockState.lastSyncTime = now;
 } else {
-// API returned stale/cached timestamp while play was active.
-// DO NOT touch lastSyncTime or officialSeconds!
-}
-} else if (!isRunning && !wasRunning && !periodChanged && !isIntermission) {
-// During a continuous stoppage, preserve clock if API returns stale seconds from before whistle
-if (newOfficialSec <= liveClockState.officialSeconds) {
-liveClockState.officialSeconds = newOfficialSec;
-liveClockState.lastSyncTime = now;
-}
-} else if (!isRunning && wasRunning && !periodChanged && !isIntermission) {
-// Just stopped by referee whistle!
-liveClockState.officialSeconds = (newOfficialSec > currentBrowserSec) ? currentBrowserSec : newOfficialSec;
-liveClockState.lastSyncTime = now;
-} else {
-// Play resumed, period changed, or intermission
-liveClockState.officialSeconds = newOfficialSec;
-liveClockState.lastSyncTime = now;
+  // Arena is running
+  if (!wasRunning) {
+    // Just resumed (puck drop): snap anchor to start of play
+    liveClockState.officialSeconds = newOfficialSec;
+    liveClockState.lastSyncTime = now;
+  } else {
+    // Continuing play: maintain local 1.0s/sec countdown, only adjust if drift > 3s
+    if (Math.abs(newOfficialSec - currentBrowserSec) > 3) {
+      liveClockState.officialSeconds = newOfficialSec;
+      liveClockState.lastSyncTime = now;
+    }
+  }
 }
 // Sync delay settings from hardware if user isn't actively adjusting them
 const userInteracting = (document.activeElement === liveDelaySlider || document.activeElement === delaySlider);

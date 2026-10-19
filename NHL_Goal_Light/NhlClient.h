@@ -140,9 +140,12 @@ public:
   const GameStatus& getStatus() const { return currentStatus; }
   const UpcomingGame& getUpcoming() const { return upcoming; }
 
-  // Ticks the game clock down second-by-second when play is active
+  // Ticks the game clock down second-by-second when play is active or during intermission
   void tick() {
-    if (currentStatus.state != STATE_LIVE || currentStatus.inIntermission || !currentStatus.clockRunning) {
+    if (currentStatus.state != STATE_LIVE) {
+      return;
+    }
+    if (!currentStatus.clockRunning && !currentStatus.inIntermission) {
       return;
     }
     unsigned long now = millis();
@@ -156,7 +159,9 @@ public:
         snprintf(buf, sizeof(buf), "%02d:%02d", mins, secs);
         currentStatus.timeRemaining = String(buf);
       } else {
-        currentStatus.clockRunning = false;
+        if (currentStatus.clockRunning) {
+          currentStatus.clockRunning = false;
+        }
       }
     }
   }
@@ -201,8 +206,8 @@ private:
         pollIntervalMs = 15000;        // 15 sec
         break;
       case STATE_LIVE:
-        // High-frequency 2-second polling during active play, 20s during intermission
-        pollIntervalMs = currentStatus.inIntermission ? 20000 : 2000;
+        // Fast 3-second polling during active play, 15s during intermission
+        pollIntervalMs = currentStatus.inIntermission ? 15000 : 3000;
         break;
       case STATE_FINAL:
         pollIntervalMs = 60000UL * 30; // 30 min
@@ -457,8 +462,8 @@ private:
   }
 
   bool pollBoxscore(bool &outOpponentGoal, bool &outGameWin, bool &outPeriodStart) {
-    // Append random cache buster parameter to bypass Cloudflare/CDN caching
-    String url = "https://api-web.nhle.com/v1/gamecenter/" + String(currentStatus.gameId) + "/play-by-play?_=" + String(millis()) + String(random(1000, 9999));
+    // Query official play-by-play endpoint
+    String url = "https://api-web.nhle.com/v1/gamecenter/" + String(currentStatus.gameId) + "/play-by-play";
 
     WiFiClientSecure client;
     client.setInsecure();
@@ -559,12 +564,26 @@ private:
       bool interm = (clockBlock.indexOf("\"inIntermission\":true") >= 0);
 
       if (sec >= 0) {
-        // Monotonic guard: If play has been running and API returns stale cached seconds, do not rewind
-        if (running && currentStatus.clockRunning && !interm && sec >= currentStatus.secondsRemaining) {
-          // Keep local smooth ticker
-        } else if (!running && currentStatus.clockRunning && !interm && sec > currentStatus.secondsRemaining) {
-          // Play just stopped (whistle), preserve local ticker's lower seconds to avoid backward jumps from stale CDN responses
+        if (interm) {
+          // Intermission: maintain local smooth ticker if drift <= 3s
+          if (abs(sec - currentStatus.secondsRemaining) > 3) {
+            currentStatus.secondsRemaining = sec;
+          }
+        } else if (running && currentStatus.clockRunning) {
+          // Play running: keep local smooth ticker, only snap if official drift > 3s
+          if (abs(sec - currentStatus.secondsRemaining) > 3) {
+            currentStatus.secondsRemaining = sec;
+          }
+        } else if (!running && currentStatus.clockRunning) {
+          // Play just stopped (whistle): snap immediately to stoppage seconds
+          currentStatus.secondsRemaining = sec;
+          currentStatus.stoppageSecondsRemaining = sec;
+        } else if (!running && !currentStatus.clockRunning) {
+          // Continuous stoppage: stay firmly locked to stoppage seconds
+          currentStatus.secondsRemaining = sec;
+          currentStatus.stoppageSecondsRemaining = sec;
         } else {
+          // Play resumed from stoppage (puck drop)
           currentStatus.secondsRemaining = sec;
         }
       }
@@ -691,7 +710,7 @@ private:
   }
 
   bool pollLandingFallback(bool &outOpponentGoal, bool &outGameWin, bool &outPeriodStart) {
-    String url = "https://api-web.nhle.com/v1/gamecenter/" + String(currentStatus.gameId) + "/landing?_=" + String(millis()) + String(random(1000, 9999));
+    String url = "https://api-web.nhle.com/v1/gamecenter/" + String(currentStatus.gameId) + "/landing";
 
     WiFiClientSecure client;
     client.setInsecure();
@@ -745,12 +764,26 @@ private:
       bool interm = (clockBlock.indexOf("\"inIntermission\":true") >= 0);
 
       if (sec >= 0) {
-        // Monotonic guard: If play has been running and API returns stale cached seconds, do not rewind
-        if (running && currentStatus.clockRunning && !interm && sec >= currentStatus.secondsRemaining) {
-          // Keep local smooth ticker
-        } else if (!running && currentStatus.clockRunning && !interm && sec > currentStatus.secondsRemaining) {
-          // Play just stopped (whistle), preserve local ticker's lower seconds to avoid backward jumps
+        if (interm) {
+          // Intermission: maintain local smooth ticker if drift <= 3s
+          if (abs(sec - currentStatus.secondsRemaining) > 3) {
+            currentStatus.secondsRemaining = sec;
+          }
+        } else if (running && currentStatus.clockRunning) {
+          // Play running: keep local smooth ticker, only snap if official drift > 3s
+          if (abs(sec - currentStatus.secondsRemaining) > 3) {
+            currentStatus.secondsRemaining = sec;
+          }
+        } else if (!running && currentStatus.clockRunning) {
+          // Play just stopped (whistle): snap immediately to stoppage seconds
+          currentStatus.secondsRemaining = sec;
+          currentStatus.stoppageSecondsRemaining = sec;
+        } else if (!running && !currentStatus.clockRunning) {
+          // Continuous stoppage: stay firmly locked to stoppage seconds
+          currentStatus.secondsRemaining = sec;
+          currentStatus.stoppageSecondsRemaining = sec;
         } else {
+          // Play resumed from stoppage (puck drop)
           currentStatus.secondsRemaining = sec;
         }
       }
