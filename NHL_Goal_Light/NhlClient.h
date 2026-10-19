@@ -549,12 +549,16 @@ private:
     int homeId = extractInt(homeBlock, "\"id\":", 0);
     int awayId = extractInt(awayBlock, "\"id\":", 0);
 
+    int oldPeriod = currentStatus.period;
+    bool wasInterm = currentStatus.inIntermission;
+
     // Parse Period
     String periodBlock = extractObject(headBlock, "\"periodDescriptor\":", 0);
     if (periodBlock.length() > 0) {
       currentStatus.period = extractInt(periodBlock, "\"number\":", 0);
     }
     if (currentStatus.period <= 0) currentStatus.period = 1;
+    bool periodChanged = (currentStatus.period != oldPeriod);
 
     // Parse Clock
     String clockBlock = extractObject(headBlock, "\"clock\":", 0);
@@ -564,10 +568,15 @@ private:
       bool interm = (clockBlock.indexOf("\"inIntermission\":true") >= 0);
 
       if (sec >= 0) {
-        if (interm) {
-          // Intermission countdown: strictly monotonic descending!
-          // NEVER jump backwards into the past (sec >= secondsRemaining)
-          if (sec < currentStatus.secondsRemaining && (currentStatus.secondsRemaining - sec > 5)) {
+        if (periodChanged) {
+          // New period started: snap clock immediately
+          currentStatus.secondsRemaining = sec;
+        } else if (interm) {
+          if (!wasInterm || currentStatus.secondsRemaining == 0) {
+            // Transitioned into intermission: snap to intermission timer
+            currentStatus.secondsRemaining = sec;
+          } else if (sec < currentStatus.secondsRemaining && (currentStatus.secondsRemaining - sec > 5)) {
+            // Strictly monotonic countdown during continuing intermission
             currentStatus.secondsRemaining = sec;
           }
         } else if (running && currentStatus.clockRunning) {
@@ -758,8 +767,16 @@ private:
     currentStatus.homeScore = extractInt(homeBlock, "\"score\":", 0);
     currentStatus.awayScore = extractInt(awayBlock, "\"score\":", 0);
 
+    int oldPeriod = currentStatus.period;
+    bool wasInterm = currentStatus.inIntermission;
+
     String clockBlock = extractObject(payload, "\"clock\":", 0);
     String periodBlock = extractObject(payload, "\"periodDescriptor\":", 0);
+    if (periodBlock.length() > 0) {
+      currentStatus.period = extractInt(periodBlock, "\"number\":", 0);
+    }
+    if (currentStatus.period <= 0) currentStatus.period = 1;
+    bool periodChanged = (currentStatus.period != oldPeriod);
 
     if (clockBlock.length() > 0) {
       int sec = extractInt(clockBlock, "\"secondsRemaining\":", 0);
@@ -767,10 +784,15 @@ private:
       bool interm = (clockBlock.indexOf("\"inIntermission\":true") >= 0);
 
       if (sec >= 0) {
-        if (interm) {
-          // Intermission countdown: strictly monotonic descending!
-          // NEVER jump backwards into the past (sec >= secondsRemaining)
-          if (sec < currentStatus.secondsRemaining && (currentStatus.secondsRemaining - sec > 5)) {
+        if (periodChanged) {
+          // New period started: snap clock immediately
+          currentStatus.secondsRemaining = sec;
+        } else if (interm) {
+          if (!wasInterm || currentStatus.secondsRemaining == 0) {
+            // Transitioned into intermission: snap to intermission timer
+            currentStatus.secondsRemaining = sec;
+          } else if (sec < currentStatus.secondsRemaining && (currentStatus.secondsRemaining - sec > 5)) {
+            // Strictly monotonic countdown during continuing intermission
             currentStatus.secondsRemaining = sec;
           }
         } else if (running && currentStatus.clockRunning) {

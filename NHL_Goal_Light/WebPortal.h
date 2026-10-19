@@ -571,22 +571,6 @@ box-shadow: 0 12px 36px rgba(0,0,0,0.6);
 </div>
 <div class="card" id="cardLiveSync">
 <h2>⏱️ Broadcast Synchronisation</h2>
-<div class="last-play-box">
-<div class="last-play-title">
-<span>🏒 Last Official NHL Play</span>
-<span style="font-size:0.68rem; color:#58a6ff; font-weight:600;">Broadcast Sync Reference</span>
-</div>
-<div class="last-play-text" id="liveLastPlay">⏳ Waiting for game action / puck drop...</div>
-<div id="livePlayTiming" style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; font-size:0.75rem; color:var(--text-muted);">
-<span>📡 Detected: <strong id="livePlayDetectedTime" style="color:var(--text);">--:--:--</strong> (<span id="livePlayElapsedSec">0</span>s ago)</span>
-<span id="livePlayFreshness" style="color:#58a6ff; font-weight:600;">● Live Cloud Feed</span>
-</div>
-<button type="button" id="btnLiveSyncToPlay" class="primary" style="margin-top:10px; width:100%; padding:9px 12px; font-size:0.85rem; font-weight:700; border-radius:8px; display:none;" onclick="syncToLastPlay()">
-🎯 Sync Delay to This Play (<span id="livePlayDelayBtnTxt">0s</span>)
-</button>
-<div id="liveRecentPlays" style="margin-top:8px; display:flex; flex-direction:column; gap:5px;"></div>
-<div class="helper-text" style="margin-top:6px;">When you see this play or whistle occur on your television, tap the button above to match your broadcast delay instantly!</div>
-</div>
 <div class="sync-clock-grid">
 <div class="sync-clock-card">
 <div class="sync-clock-label">Official NHL Clock</div>
@@ -598,6 +582,17 @@ box-shadow: 0 12px 36px rgba(0,0,0,0.6);
 <div class="sync-clock-time" id="liveTargetTvClock" style="color:var(--accent);">--:--</div>
 <div class="sync-clock-sub" id="liveDelayBadge">Delay: 0s Buffer</div>
 </div>
+</div>
+<div style="background:#11141a; border-radius:8px; border:1px solid var(--border); padding:10px 12px; margin-top:8px; margin-bottom:8px;">
+<div style="font-size:0.8rem; font-weight:700; color:var(--text); margin-bottom:4px;">📺 Quick TV Scoreboard Matcher</div>
+<div class="helper-text" style="margin-bottom:6px;">Type the clock from your TV screen:</div>
+<div style="display:flex; gap:6px; align-items:center;">
+<input type="number" id="liveTvMin" min="0" max="20" placeholder="MM" style="width:60px; text-align:center; font-size:1rem; font-weight:700; padding:6px; border-radius:6px; border:1px solid var(--border); background:#161b22; color:var(--text);">
+<span style="font-weight:700; color:var(--text-muted);">:</span>
+<input type="number" id="liveTvSec" min="0" max="59" placeholder="SS" style="width:60px; text-align:center; font-size:1rem; font-weight:700; padding:6px; border-radius:6px; border:1px solid var(--border); background:#161b22; color:var(--text);">
+<button type="button" class="primary" style="padding:6px 14px; font-weight:700; border-radius:6px; flex:1;" onclick="applyTvScoreboardMatch('live')">🎯 Set Delay</button>
+</div>
+<div id="liveTvMatchResult" style="font-size:0.75rem; text-align:center; margin-top:4px; min-height:16px;"></div>
 </div>
 <div class="form-group">
 <label>Broadcast Delay Buffer: <strong id="liveDelayVal" style="color:var(--accent);">0s (Instantaneous)</strong></label>
@@ -611,27 +606,20 @@ box-shadow: 0 12px 36px rgba(0,0,0,0.6);
 <button type="button" onclick="quickNudgeDelay(1)">▶️ +1s</button>
 <button type="button" onclick="quickNudgeDelay(5)">⏩ +5s</button>
 </div>
-<div style="background:#11141a; border-radius:8px; border:1px solid var(--border); padding:10px 12px; margin-top:8px; margin-bottom:8px;">
-<div style="font-size:0.8rem; font-weight:700; color:var(--text); margin-bottom:4px;">📺 Quick TV Scoreboard Matcher</div>
-<div class="helper-text" style="margin-bottom:6px;">Type the clock from your TV screen:</div>
-<div style="display:flex; gap:6px; align-items:center;">
-<input type="number" id="liveTvMin" min="0" max="20" placeholder="MM" style="width:60px; text-align:center; font-size:1rem; font-weight:700; padding:6px; border-radius:6px; border:1px solid var(--border); background:#161b22; color:var(--text);">
-<span style="font-weight:700; color:var(--text-muted);">:</span>
-<input type="number" id="liveTvSec" min="0" max="59" placeholder="SS" style="width:60px; text-align:center; font-size:1rem; font-weight:700; padding:6px; border-radius:6px; border:1px solid var(--border); background:#161b22; color:var(--text);">
-<button type="button" class="primary" style="padding:6px 14px; font-weight:700; border-radius:6px; flex:1;" onclick="applyTvScoreboardMatch('live')">🎯 Set Delay</button>
-</div>
-<div id="liveTvMatchResult" style="font-size:0.75rem; text-align:center; margin-top:4px; min-height:16px;"></div>
-</div>
-<button type="button" id="btnWhistleSyncLive" class="primary" style="margin-top:8px; margin-bottom:4px; width:100%; padding:10px 14px; font-size:0.88rem; font-weight:700; border-radius:8px; background:linear-gradient(135deg, #1f6feb 0%, #1158c7 100%); border:1px solid #388bfd; cursor:pointer;" onclick="syncToWhistleNow()">
-🔔 I See a Whistle on TV Right Now! (<span class="whistleElapsedTxt">0s</span>)
-</button>
-<div class="helper-text" style="margin-bottom:10px; text-align:center;">One-tap sync: tap the second you see or hear a whistle on your TV!</div>
 <label style="margin-top:8px;">Quick Broadcaster Presets:</label>
 <div class="preset-row">
 <button type="button" class="preset-btn" onclick="quickSetPreset(0)">⚡ Cable / OTA (0s)</button>
 <button type="button" class="preset-btn" onclick="quickSetPreset(22)">🍁 Sportsnet+ (22s)</button>
 <button type="button" class="preset-btn" onclick="quickSetPreset(28)">🏒 NHL.tv / ESPN+ (28s)</button>
 <button type="button" class="preset-btn" onclick="quickSetPreset(45)">📺 YouTube TV (45s)</button>
+</div>
+<div class="last-play-box" style="margin-top:10px;">
+<div class="last-play-title">
+<span>🏒 Last Official NHL Play</span>
+<span style="font-size:0.68rem; color:#58a6ff; font-weight:600;">Arena Feed</span>
+</div>
+<div class="last-play-text" id="liveLastPlay">⏳ Waiting for game action / puck drop...</div>
+<div id="liveRecentPlays" style="margin-top:8px; display:flex; flex-direction:column; gap:5px;"></div>
 </div>
 <div class="helper-text" style="margin-top:8px;">⚡ Adjusting delay updates your goal light buffer immediately without saving or rebooting.</div>
 </div>
@@ -1052,24 +1040,12 @@ box-shadow: 0 12px 36px rgba(0,0,0,0.6);
 <button type="button" id="btnApplyTvMatch" class="primary" style="padding:9px 16px; font-weight:700; border-radius:8px;" onclick="applyTvScoreboardMatch('sync')">🎯 Match TV</button>
 </div>
 <div id="tvMatchResult" style="font-size:0.78rem; text-align:center; min-height:18px;"></div>
-<button type="button" id="btnWhistleSyncTab4" class="primary" style="margin-top:10px; width:100%; padding:10px 14px; font-size:0.88rem; font-weight:700; border-radius:8px; background:linear-gradient(135deg, #1f6feb 0%, #1158c7 100%); border:1px solid #388bfd; cursor:pointer;" onclick="syncToWhistleNow()">
-🔔 I See a Whistle on TV Right Now! (<span class="whistleElapsedTxt">0s</span>)
-</button>
-<div class="helper-text" style="margin-top:4px; text-align:center;">One-tap sync: tap the second you see or hear a whistle on your TV!</div>
-</div>
 <div class="last-play-box" style="margin-bottom:4px;">
 <div class="last-play-title">
 <span>🏒 Last Official NHL Play</span>
-<span style="font-size:0.68rem; color:#58a6ff; font-weight:600;">Arena Whistle Anchor</span>
+<span style="font-size:0.68rem; color:#58a6ff; font-weight:600;">Arena Feed</span>
 </div>
 <div class="last-play-text" id="syncLastPlayText">⏳ Waiting for live game action / puck drop...</div>
-<div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; font-size:0.75rem; color:var(--text-muted);">
-<span>📡 Detected: <strong id="syncPlayDetectedTime" style="color:var(--text);">--:--:--</strong> (<span id="syncPlayElapsedSec">0</span>s ago)</span>
-<span id="syncPlayStatusPill" style="color:#58a6ff; font-weight:600;">● Cloud Live</span>
-</div>
-<button type="button" id="btnSyncToPlay" class="primary" style="margin-top:10px; width:100%; padding:10px 14px; font-size:0.85rem; font-weight:700; border-radius:8px; display:none;" onclick="syncToLastPlay()">
-🎯 Sync Delay to This Play (<span id="syncPlayDelayBtnTxt">0s</span>)
-</button>
 <div id="syncRecentPlays" style="margin-top:8px; display:flex; flex-direction:column; gap:5px;"></div>
 </div>
 </div>
@@ -1604,49 +1580,17 @@ containers.forEach(c => { if (c) c.innerHTML = ''; });
 return;
 }
 let html = '<div style="font-size:0.7rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; margin-top:6px; margin-bottom:4px;">📜 Recent Arena Events Timeline:</div>';
-plays.forEach((p, idx) => {
+plays.forEach((p) => {
 const esc = (p.desc || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-html += `<div class="recent-play-row" style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:6px; padding:5px 8px; font-size:0.75rem; gap:6px;">
-<div style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+html += `<div class="recent-play-row" style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:6px; padding:6px 10px; font-size:0.75rem;">
 <strong style="color:var(--text);">${esc}</strong>
-<span style="color:var(--text-muted); font-size:0.68rem; display:block;">Detected <span class="recent-elapsed" data-idx="${idx}">${p.elapsed || 0}</span>s ago</span>
-</div>
-<button type="button" class="primary" style="padding:4px 8px; font-size:0.7rem; border-radius:4px; font-weight:700; white-space:nowrap;" onclick="syncToRecentPlay(${idx})">🎯 Sync (${p.elapsed || 0}s)</button>
 </div>`;
 });
 containers.forEach(c => { if (c) c.innerHTML = html; });
 }
-window.syncToRecentPlay = function(idx) {
-if (!cachedRecentPlays[idx]) return;
-const p = cachedRecentPlays[idx];
-const now = Date.now();
-const elSec = (p.elapsed || 0) + Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
-const targetDelay = Math.min(120, Math.max(0, elSec));
-sendQuickDelay(targetDelay);
-showToast(`🎯 Broadcast delay set to ${targetDelay}s!`);
-};
 let lastPlayTracker = {
 text: '',
 detectedTime: 0
-};
-window.syncToLastPlay = function() {
-if (!lastPlayTracker.detectedTime) return;
-const playElapsed = Math.max(0, Math.floor((Date.now() - lastPlayTracker.detectedTime) / 1000));
-const targetDelay = Math.min(120, Math.max(0, playElapsed));
-sendQuickDelay(targetDelay);
-showToast(`🎯 Broadcast delay set to ${targetDelay}s (matches last arena event)!`);
-};
-window.syncToWhistleNow = function() {
-const now = Date.now();
-const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
-const stopElapsed = (typeof liveClockState.stoppageElapsed === 'number') ? (liveClockState.stoppageElapsed + elapsedSinceSync) : 9999;
-if (liveClockState.running && liveClockState.resumeElapsed > 20) {
-showToast('⚠️ Play is currently active at the arena. Wait for the next whistle on TV to sync!');
-return;
-}
-const targetDelay = Math.min(120, Math.max(0, stopElapsed));
-sendQuickDelay(targetDelay);
-showToast(`🔔 Whistle matched! Broadcast delay set to ${targetDelay}s.`);
 };
 function copyToClipboard(text) {
 if (navigator.clipboard && window.isSecureContext && navigator.clipboard.writeText) {
@@ -1706,27 +1650,13 @@ let curOfficial = liveClockState.officialSeconds;
 if (liveClockState.running) {
 curOfficial = Math.max(0, curOfficial - elapsedSinceSync);
 }
-const stopSec = (typeof liveClockState.stoppageSeconds === 'number' && liveClockState.stoppageSeconds >= 0) ? liveClockState.stoppageSeconds : curOfficial;
-const stopElapsed = (typeof liveClockState.stoppageElapsed === 'number') ? (liveClockState.stoppageElapsed + elapsedSinceSync) : 9999;
+const offM = Math.floor(curOfficial / 60);
+const offS = curOfficial % 60;
+const offStr = `${offM}:${offS < 10 ? '0' : ''}${offS}`;
 
-let calculatedDelay = 0;
-if (!liveClockState.running) {
-if (tvTotalSec === stopSec) {
-if (resEl) resEl.innerHTML = `<span style="color:#eab308;">ℹ️ Play is currently stopped at ${m}:${s < 10 ? '0' : ''}${s} on both arena and TV.<br>Tap <strong>"🔔 I See a Whistle on TV Right Now!"</strong> to sync immediately!</span>`;
-return;
-} else if (tvTotalSec > stopSec) {
-// Play stopped at arena, but TV is still counting down towards the whistle
-calculatedDelay = stopElapsed + (tvTotalSec - stopSec);
-} else {
-if (resEl) resEl.innerHTML = `<span style="color:#f87171;">⚠️ TV clock (${m}:${s < 10 ? '0' : ''}${s}) is ahead of arena stoppage (${Math.floor(stopSec/60)}:${stopSec%60 < 10 ? '0' : ''}${stopSec})!</span>`;
-return;
-}
-} else {
-calculatedDelay = tvTotalSec - curOfficial;
-}
-
+const calculatedDelay = tvTotalSec - curOfficial;
 if (calculatedDelay < 0) {
-if (resEl) resEl.innerHTML = `<span style="color:#f87171;">⚠️ TV clock is ahead of official arena clock! Broadcast feeds are delayed behind the arena.</span>`;
+if (resEl) resEl.innerHTML = `<span style="color:#f87171;">⚠️ TV clock (${m}:${s < 10 ? '0' : ''}${s}) is ahead of official clock (${offStr})! In hockey countdown, TV should have more time remaining.</span>`;
 return;
 }
 if (calculatedDelay > 120) {
@@ -1734,8 +1664,12 @@ if (resEl) resEl.innerHTML = `<span style="color:#f87171;">⚠️ Calculated del
 return;
 }
 
+if (!liveClockState.running) {
+liveClockState.stoppageElapsed = 0;
+}
+
 sendQuickDelay(calculatedDelay);
-if (resEl) resEl.innerHTML = `<span style="color:#4ade80;">🎯 TV is ${calculatedDelay}s behind arena clock. Broadcast delay set to ${calculatedDelay}s!</span>`;
+if (resEl) resEl.innerHTML = `<span style="color:#4ade80;">🎯 TV is ${calculatedDelay}s behind official clock. Broadcast delay set to ${calculatedDelay}s!</span>`;
 showToast(`🎯 Synchronised! Broadcast delay set to ${calculatedDelay}s.`);
 };
 let lastUserDelayChange = 0;
