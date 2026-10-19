@@ -13,6 +13,14 @@ enum NhlGameState {
   STATE_FINAL
 };
 
+#define MAX_RECENT_PLAYS 6
+
+struct PlayHistoryItem {
+  String desc;
+  unsigned long arrivalMillis;
+  unsigned long arrivalEpoch;
+};
+
 struct GameStatus {
   NhlGameState state;
   int gameId;
@@ -29,6 +37,8 @@ struct GameStatus {
   String lastPlay;
   unsigned long lastPlayMillis;
   unsigned long lastPlayEpoch;
+  PlayHistoryItem recentPlays[MAX_RECENT_PLAYS];
+  uint8_t recentPlayCount;
   unsigned long lastPollEpoch;
   String apiServerDate;
   int apiCacheAge;
@@ -92,6 +102,7 @@ public:
     currentStatus.lastStoppageMillis = 0;
     currentStatus.lastResumeMillis = 0;
     currentStatus.stoppageSecondsRemaining = 1200;
+    currentStatus.recentPlayCount = 0;
     upcoming.valid = false;
   }
 
@@ -113,6 +124,8 @@ public:
     currentStatus.lastPlay = "";
     currentStatus.lastPlayMillis = 0;
     currentStatus.lastPlayEpoch = 0;
+    currentStatus.recentPlayCount = 0;
+    for (int i = 0; i < MAX_RECENT_PLAYS; i++) currentStatus.recentPlays[i].desc = "";
     currentStatus.lastPollEpoch = 0;
     currentStatus.apiServerDate = "";
     currentStatus.apiCacheAge = 0;
@@ -604,10 +617,30 @@ private:
     if (lastPlayStart >= 0) {
       String playObj = playsEnd.substring(lastPlayStart);
       String newPlay = formatPlayObject(playObj, homeId, awayId);
-      if (newPlay != currentStatus.lastPlay) {
+      if (newPlay != currentStatus.lastPlay && newPlay.length() > 0) {
+        if (currentStatus.recentPlayCount == 0) {
+          int prevPlayStart = playsEnd.lastIndexOf("{\"eventId\":", lastPlayStart - 1);
+          if (prevPlayStart >= 0) {
+            String prevObj = playsEnd.substring(prevPlayStart, lastPlayStart);
+            String prevPlay = formatPlayObject(prevObj, homeId, awayId);
+            if (prevPlay.length() > 0 && prevPlay != newPlay) {
+              currentStatus.recentPlays[1].desc = prevPlay;
+              currentStatus.recentPlays[1].arrivalMillis = millis() - 30000;
+              currentStatus.recentPlays[1].arrivalEpoch = (unsigned long)time(nullptr) - 30;
+              currentStatus.recentPlayCount = 2;
+            }
+          }
+        }
         currentStatus.lastPlay = newPlay;
         currentStatus.lastPlayMillis = millis();
         currentStatus.lastPlayEpoch = (unsigned long)time(nullptr);
+        for (int i = MAX_RECENT_PLAYS - 1; i > 0; i--) {
+          currentStatus.recentPlays[i] = currentStatus.recentPlays[i - 1];
+        }
+        currentStatus.recentPlays[0].desc = newPlay;
+        currentStatus.recentPlays[0].arrivalMillis = currentStatus.lastPlayMillis;
+        currentStatus.recentPlays[0].arrivalEpoch = currentStatus.lastPlayEpoch;
+        if (currentStatus.recentPlayCount < MAX_RECENT_PLAYS) currentStatus.recentPlayCount++;
       }
     } else if (currentStatus.state == STATE_LIVE) {
       if (currentStatus.lastPlay.length() == 0) {

@@ -1047,7 +1047,16 @@ void setupWebServer() {
     json += "\"lastPlayEpoch\":" + String(gs.lastPlayEpoch) + ",";
     json += "\"espEpoch\":" + String((unsigned long)time(nullptr)) + ",";
     json += "\"apiDate\":\"" + safeApiDate + "\",";
-    json += "\"apiAge\":" + String(gs.apiCacheAge);
+    json += "\"apiAge\":" + String(gs.apiCacheAge) + ",";
+    json += "\"recentPlays\":[";
+    for (int i = 0; i < gs.recentPlayCount; i++) {
+      if (i > 0) json += ",";
+      unsigned long rElapsed = (gs.recentPlays[i].arrivalMillis > 0) ? ((millis() - gs.recentPlays[i].arrivalMillis) / 1000UL) : 0;
+      String desc = gs.recentPlays[i].desc;
+      desc.replace("\"", "'");
+      json += "{\"desc\":\"" + desc + "\",\"elapsed\":" + String(rElapsed) + "}";
+    }
+    json += "]";
     json += "},";
     json += "\"upcoming\":{";
     json += "\"valid\":" + String(up.valid ? "true" : "false") + ",";
