@@ -1040,6 +1040,7 @@ box-shadow: 0 12px 36px rgba(0,0,0,0.6);
 <button type="button" id="btnApplyTvMatch" class="primary" style="padding:9px 16px; font-weight:700; border-radius:8px;" onclick="applyTvScoreboardMatch('sync')">🎯 Match TV</button>
 </div>
 <div id="tvMatchResult" style="font-size:0.78rem; text-align:center; min-height:18px;"></div>
+</div>
 <div class="last-play-box" style="margin-bottom:4px;">
 <div class="last-play-title">
 <span>🏒 Last Official NHL Play</span>
