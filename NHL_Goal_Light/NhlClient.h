@@ -149,8 +149,15 @@ public:
       return;
     }
     unsigned long now = millis();
-    if (now - lastClockTick >= 1000) {
+    if (lastClockTick == 0) {
       lastClockTick = now;
+      return;
+    }
+    if (now - lastClockTick > 10000) {
+      lastClockTick = now - 1000;
+    }
+    while (now - lastClockTick >= 1000) {
+      lastClockTick += 1000;
       if (currentStatus.secondsRemaining > 0) {
         currentStatus.secondsRemaining--;
         int mins = currentStatus.secondsRemaining / 60;
@@ -162,6 +169,7 @@ public:
         if (currentStatus.clockRunning) {
           currentStatus.clockRunning = false;
         }
+        break;
       }
     }
   }
@@ -571,19 +579,22 @@ private:
         if (periodChanged) {
           // New period started: snap clock immediately
           currentStatus.secondsRemaining = sec;
+          lastClockTick = millis();
         } else if (interm) {
           if (!wasInterm || currentStatus.secondsRemaining == 0) {
             // Transitioned into intermission: snap to intermission timer
             currentStatus.secondsRemaining = sec;
-          } else if (sec < currentStatus.secondsRemaining && (currentStatus.secondsRemaining - sec > 5)) {
+            lastClockTick = millis();
+          } else if (sec < currentStatus.secondsRemaining && (currentStatus.secondsRemaining - sec > 3)) {
             // Strictly monotonic countdown during continuing intermission
             currentStatus.secondsRemaining = sec;
           }
         } else if (running && currentStatus.clockRunning) {
           // Play running: strictly monotonic descending clock!
           // NEVER jump backwards into the past (sec >= secondsRemaining)
-          // Stale responses from CDN edge cache are ignored
-          if (sec < currentStatus.secondsRemaining && (currentStatus.secondsRemaining - sec > 5)) {
+          // Stale responses from CDN edge cache are ignored.
+          // Gently align if arena clock differs by > 3s
+          if (sec < currentStatus.secondsRemaining && (currentStatus.secondsRemaining - sec > 3)) {
             currentStatus.secondsRemaining = sec;
           }
         } else if (!running && currentStatus.clockRunning) {
@@ -597,6 +608,7 @@ private:
         } else {
           // Play resumed from stoppage (puck drop)
           currentStatus.secondsRemaining = sec;
+          lastClockTick = millis();
         }
       }
 
@@ -607,6 +619,7 @@ private:
         Serial.printf("[Clock] Referee stoppage at %02d:%02d\n", currentStatus.secondsRemaining / 60, currentStatus.secondsRemaining % 60);
       } else if (!currentStatus.clockRunning && running) {
         currentStatus.lastResumeMillis = millis();
+        lastClockTick = millis(); // Anchor local ticker accumulator to exact puck drop
         Serial.printf("[Clock] Play resumed at %02d:%02d\n", currentStatus.secondsRemaining / 60, currentStatus.secondsRemaining % 60);
       }
 
@@ -638,7 +651,6 @@ private:
       } else {
         currentStatus.timeRemaining = extractString(clockBlock, "\"timeRemaining\":\"", 0);
       }
-      lastClockTick = millis();
     }
 
     // Extract Last Play from rolling buffer
@@ -787,18 +799,20 @@ private:
         if (periodChanged) {
           // New period started: snap clock immediately
           currentStatus.secondsRemaining = sec;
+          lastClockTick = millis();
         } else if (interm) {
           if (!wasInterm || currentStatus.secondsRemaining == 0) {
             // Transitioned into intermission: snap to intermission timer
             currentStatus.secondsRemaining = sec;
-          } else if (sec < currentStatus.secondsRemaining && (currentStatus.secondsRemaining - sec > 5)) {
+            lastClockTick = millis();
+          } else if (sec < currentStatus.secondsRemaining && (currentStatus.secondsRemaining - sec > 3)) {
             // Strictly monotonic countdown during continuing intermission
             currentStatus.secondsRemaining = sec;
           }
         } else if (running && currentStatus.clockRunning) {
           // Play running: strictly monotonic descending clock!
           // NEVER jump backwards into the past (sec >= secondsRemaining)
-          if (sec < currentStatus.secondsRemaining && (currentStatus.secondsRemaining - sec > 5)) {
+          if (sec < currentStatus.secondsRemaining && (currentStatus.secondsRemaining - sec > 3)) {
             currentStatus.secondsRemaining = sec;
           }
         } else if (!running && currentStatus.clockRunning) {
@@ -812,6 +826,7 @@ private:
         } else {
           // Play resumed from stoppage (puck drop)
           currentStatus.secondsRemaining = sec;
+          lastClockTick = millis();
         }
       }
 
@@ -820,6 +835,7 @@ private:
         currentStatus.stoppageSecondsRemaining = currentStatus.secondsRemaining;
       } else if (!currentStatus.clockRunning && running) {
         currentStatus.lastResumeMillis = millis();
+        lastClockTick = millis();
       }
 
       currentStatus.clockRunning = running;
@@ -850,7 +866,6 @@ private:
       } else {
         currentStatus.timeRemaining = extractString(clockBlock, "\"timeRemaining\":\"", 0);
       }
-      lastClockTick = millis();
     }
     if (periodBlock.length() > 0) {
       currentStatus.period = extractInt(periodBlock, "\"number\":", 0);

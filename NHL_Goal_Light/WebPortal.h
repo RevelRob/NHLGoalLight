@@ -2224,7 +2224,7 @@ if (periodChanged || (isIntermission !== wasIntermission)) {
   // During intermission: local timer ticks down smoothly 1 sec/sec
   // Strictly monotonic descending: never jump backwards into the past!
   const currentIntermSec = Math.max(0, liveClockState.officialSeconds - elapsedSinceSync);
-  if (newOfficialSec < currentIntermSec && (currentIntermSec - newOfficialSec > 5)) {
+  if (newOfficialSec < currentIntermSec && (currentIntermSec - newOfficialSec > 3)) {
     liveClockState.officialSeconds = newOfficialSec;
     liveClockState.lastSyncTime = now;
   }
@@ -2243,7 +2243,7 @@ if (periodChanged || (isIntermission !== wasIntermission)) {
     // Continuing play: maintain local 1.0s/sec countdown!
     // Strictly monotonic descending: NEVER jump backwards into the past!
     // Stale cached CDN responses (newOfficialSec >= currentBrowserSec) are ignored
-    if (newOfficialSec < currentBrowserSec && (currentBrowserSec - newOfficialSec > 5)) {
+    if (newOfficialSec < currentBrowserSec && (currentBrowserSec - newOfficialSec > 3)) {
       liveClockState.officialSeconds = newOfficialSec;
       liveClockState.lastSyncTime = now;
     }
