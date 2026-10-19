@@ -1518,44 +1518,11 @@ if (badgeEl) badgeEl.textContent = tvStatusSub;
 const syncBadgeEl = document.getElementById('syncDelayBadge');
 if (syncBadgeEl) syncBadgeEl.textContent = tvStatusSub;
 
-// Update live whistle sync button label
-const whistleSecVal = Math.min(120, Math.max(0, stopElapsed));
-document.querySelectorAll('.whistleElapsedTxt').forEach(el => {
-el.textContent = `${whistleSecVal}s`;
-});
-
-// Update play elapsed timer and sync button labels
+// Diagnostics play lag
 if (lastPlayTracker.detectedTime > 0) {
 const playElapsed = Math.max(0, Math.floor((now - lastPlayTracker.detectedTime) / 1000));
-const el1 = document.getElementById('livePlayElapsedSec');
-if (el1) el1.textContent = playElapsed;
-const btnTxt1 = document.getElementById('livePlayDelayBtnTxt');
-if (btnTxt1) btnTxt1.textContent = playElapsed + 's';
-const btn1 = document.getElementById('btnLiveSyncToPlay');
-if (btn1) {
-btn1.style.display = (playElapsed > 0 && playElapsed <= 120 && liveClockState.active) ? 'block' : 'none';
-}
-const el2 = document.getElementById('syncPlayElapsedSec');
-if (el2) el2.textContent = playElapsed;
-const btnTxt2 = document.getElementById('syncPlayDelayBtnTxt');
-if (btnTxt2) btnTxt2.textContent = playElapsed + 's';
-const btn2 = document.getElementById('btnSyncToPlay');
-if (btn2) {
-btn2.style.display = (playElapsed > 0 && playElapsed <= 120 && liveClockState.active) ? 'block' : 'none';
-}
 const diagLag = document.getElementById('diagPlayLag');
 if (diagLag) diagLag.textContent = playElapsed + 's ago';
-}
-if (cachedRecentPlays.length > 0) {
-document.querySelectorAll('.recent-elapsed').forEach(el => {
-const idx = parseInt(el.getAttribute('data-idx'));
-if (cachedRecentPlays[idx]) {
-const elSec = (cachedRecentPlays[idx].elapsed || 0) + Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
-el.textContent = elSec;
-const btn = el.closest('.recent-play-row')?.querySelector('button');
-if (btn) btn.textContent = `🎯 Sync (${elSec}s)`;
-}
-});
 }
 }
 function showToast(msg) {
@@ -1651,26 +1618,46 @@ let curOfficial = liveClockState.officialSeconds;
 if (liveClockState.running) {
 curOfficial = Math.max(0, curOfficial - elapsedSinceSync);
 }
+const stopSec = (typeof liveClockState.stoppageSeconds === 'number' && liveClockState.stoppageSeconds >= 0) ? liveClockState.stoppageSeconds : curOfficial;
+const stopElapsed = (typeof liveClockState.stoppageElapsed === 'number') ? (liveClockState.stoppageElapsed + elapsedSinceSync) : 9999;
 const offM = Math.floor(curOfficial / 60);
 const offS = curOfficial % 60;
 const offStr = `${offM}:${offS < 10 ? '0' : ''}${offS}`;
 
-const calculatedDelay = tvTotalSec - curOfficial;
+let calculatedDelay = 0;
+
+if (liveClockState.running) {
+// 1. ACTIVE PLAY: Both clocks actively counting down
+calculatedDelay = tvTotalSec - curOfficial;
 if (calculatedDelay < 0) {
 if (resEl) resEl.innerHTML = `<span style="color:#f87171;">⚠️ TV clock (${m}:${s < 10 ? '0' : ''}${s}) is ahead of official clock (${offStr})! In hockey countdown, TV should have more time remaining.</span>`;
 return;
 }
+if (resEl) resEl.innerHTML = `<span style="color:#4ade80;">🎯 TV is ${calculatedDelay}s behind official clock. Broadcast delay set to ${calculatedDelay}s!</span>`;
+} else {
+// 2. STOPPAGE: Arena clock is stopped at stopSec
+if (tvTotalSec === stopSec) {
+// Both arena and TV are stopped at the whistle (commercial break / faceoff setup)
+if (resEl) resEl.innerHTML = `<span style="color:#4ade80;">⏸️ Play is stopped at ${offStr} on both TV and arena.<br>Current broadcast delay (${liveClockState.delaySec}s) is preserved for puck drop. Use presets or slider to adjust.</span>`;
+return;
+} else if (tvTotalSec > stopSec) {
+// Arena stopped, but TV is still counting down towards the whistle!
+const remainingToWhistle = tvTotalSec - stopSec;
+calculatedDelay = stopElapsed + remainingToWhistle;
+if (resEl) resEl.innerHTML = `<span style="color:#4ade80;">🎯 TV is ${remainingToWhistle}s away from whistle at ${offStr}. Broadcast delay set to ${calculatedDelay}s!</span>`;
+} else {
+// TV entered less seconds remaining than where the referee stopped play
+if (resEl) resEl.innerHTML = `<span style="color:#f87171;">⚠️ Referee stopped play at ${offStr}. The clock paused at ${offStr} and cannot reach ${m}:${s < 10 ? '0' : ''}${s} until play resumes.</span>`;
+return;
+}
+}
+
 if (calculatedDelay > 120) {
 if (resEl) resEl.innerHTML = `<span style="color:#f87171;">⚠️ Calculated delay (${calculatedDelay}s) exceeds maximum 120s buffer. Please check period or time entered.</span>`;
 return;
 }
 
-if (!liveClockState.running) {
-liveClockState.stoppageElapsed = 0;
-}
-
 sendQuickDelay(calculatedDelay);
-if (resEl) resEl.innerHTML = `<span style="color:#4ade80;">🎯 TV is ${calculatedDelay}s behind official clock. Broadcast delay set to ${calculatedDelay}s!</span>`;
 showToast(`🎯 Synchronised! Broadcast delay set to ${calculatedDelay}s.`);
 };
 let lastUserDelayChange = 0;
