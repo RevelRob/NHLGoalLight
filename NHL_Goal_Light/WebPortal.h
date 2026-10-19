@@ -1648,19 +1648,44 @@ const targetDelay = Math.min(120, Math.max(0, stopElapsed));
 sendQuickDelay(targetDelay);
 showToast(`🔔 Whistle matched! Broadcast delay set to ${targetDelay}s.`);
 };
+function copyToClipboard(text) {
+if (navigator.clipboard && window.isSecureContext && navigator.clipboard.writeText) {
+return navigator.clipboard.writeText(text);
+}
+return new Promise((resolve) => {
+try {
+const ta = document.createElement('textarea');
+ta.value = text;
+ta.style.position = 'fixed';
+ta.style.left = '-9999px';
+ta.style.top = '-9999px';
+document.body.appendChild(ta);
+ta.focus();
+ta.select();
+const success = document.execCommand('copy');
+document.body.removeChild(ta);
+if (success) {
+resolve();
+} else {
+prompt('Copy live feed JSON manually (Ctrl+C / Cmd+C):', text);
+resolve();
+}
+} catch (e) {
+prompt('Copy live feed JSON manually (Ctrl+C / Cmd+C):', text);
+resolve();
+}
+});
+}
 window.copyLiveFeedDebug = function() {
 fetch('/api/status')
 .then(r => r.json())
 .then(data => {
 const txt = JSON.stringify(data, null, 2);
-navigator.clipboard.writeText(txt).then(() => {
-showToast('📋 Live feed JSON copied to clipboard!');
-}).catch(() => {
-showToast('📋 Copy complete (check console if clipboard blocked).');
-console.log('Live Feed Diagnostics:', txt);
-});
+copyToClipboard(txt)
+.then(() => showToast('📋 Live feed JSON copied to clipboard!'))
+.catch(() => showToast('📋 Feed output to console.'));
 })
-.catch(() => showToast('⚠️ Failed to fetch feed status.'));
+.catch(() => showToast('⚠️ Device did not respond. Check connection.'));
 };
 window.applyTvScoreboardMatch = function(source) {
 const isLive = (source === 'live');
@@ -2275,9 +2300,9 @@ if (periodChanged || (isIntermission !== wasIntermission)) {
   liveClockState.lastSyncTime = now;
 } else if (isIntermission) {
   // During intermission: local timer ticks down smoothly 1 sec/sec
-  // Only resync anchor if API differs by more than 3 seconds
+  // Strictly monotonic descending: never jump backwards into the past!
   const currentIntermSec = Math.max(0, liveClockState.officialSeconds - elapsedSinceSync);
-  if (Math.abs(newOfficialSec - currentIntermSec) > 3) {
+  if (newOfficialSec < currentIntermSec && (currentIntermSec - newOfficialSec > 5)) {
     liveClockState.officialSeconds = newOfficialSec;
     liveClockState.lastSyncTime = now;
   }
@@ -2293,8 +2318,10 @@ if (periodChanged || (isIntermission !== wasIntermission)) {
     liveClockState.officialSeconds = newOfficialSec;
     liveClockState.lastSyncTime = now;
   } else {
-    // Continuing play: maintain local 1.0s/sec countdown, only adjust if drift > 3s
-    if (Math.abs(newOfficialSec - currentBrowserSec) > 3) {
+    // Continuing play: maintain local 1.0s/sec countdown!
+    // Strictly monotonic descending: NEVER jump backwards into the past!
+    // Stale cached CDN responses (newOfficialSec >= currentBrowserSec) are ignored
+    if (newOfficialSec < currentBrowserSec && (currentBrowserSec - newOfficialSec > 5)) {
       liveClockState.officialSeconds = newOfficialSec;
       liveClockState.lastSyncTime = now;
     }

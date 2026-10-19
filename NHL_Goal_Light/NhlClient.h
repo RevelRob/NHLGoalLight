@@ -565,13 +565,16 @@ private:
 
       if (sec >= 0) {
         if (interm) {
-          // Intermission: maintain local smooth ticker if drift <= 3s
-          if (abs(sec - currentStatus.secondsRemaining) > 3) {
+          // Intermission countdown: strictly monotonic descending!
+          // NEVER jump backwards into the past (sec >= secondsRemaining)
+          if (sec < currentStatus.secondsRemaining && (currentStatus.secondsRemaining - sec > 5)) {
             currentStatus.secondsRemaining = sec;
           }
         } else if (running && currentStatus.clockRunning) {
-          // Play running: keep local smooth ticker, only snap if official drift > 3s
-          if (abs(sec - currentStatus.secondsRemaining) > 3) {
+          // Play running: strictly monotonic descending clock!
+          // NEVER jump backwards into the past (sec >= secondsRemaining)
+          // Stale responses from CDN edge cache are ignored
+          if (sec < currentStatus.secondsRemaining && (currentStatus.secondsRemaining - sec > 5)) {
             currentStatus.secondsRemaining = sec;
           }
         } else if (!running && currentStatus.clockRunning) {
@@ -765,13 +768,15 @@ private:
 
       if (sec >= 0) {
         if (interm) {
-          // Intermission: maintain local smooth ticker if drift <= 3s
-          if (abs(sec - currentStatus.secondsRemaining) > 3) {
+          // Intermission countdown: strictly monotonic descending!
+          // NEVER jump backwards into the past (sec >= secondsRemaining)
+          if (sec < currentStatus.secondsRemaining && (currentStatus.secondsRemaining - sec > 5)) {
             currentStatus.secondsRemaining = sec;
           }
         } else if (running && currentStatus.clockRunning) {
-          // Play running: keep local smooth ticker, only snap if official drift > 3s
-          if (abs(sec - currentStatus.secondsRemaining) > 3) {
+          // Play running: strictly monotonic descending clock!
+          // NEVER jump backwards into the past (sec >= secondsRemaining)
+          if (sec < currentStatus.secondsRemaining && (currentStatus.secondsRemaining - sec > 5)) {
             currentStatus.secondsRemaining = sec;
           }
         } else if (!running && currentStatus.clockRunning) {
