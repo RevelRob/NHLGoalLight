@@ -1041,6 +1041,15 @@ box-shadow: 0 12px 36px rgba(0,0,0,0.6);
 </div>
 <div id="tvMatchResult" style="font-size:0.78rem; text-align:center; min-height:18px;"></div>
 </div>
+<div style="background:#11141a; border-radius:10px; border:1px solid var(--border); padding:12px 14px; margin-bottom:12px;">
+<div style="font-size:0.82rem; font-weight:700; color:var(--text); margin-bottom:4px;">⚡ 1-Tap Stoppage & Faceoff Sync</div>
+<div class="helper-text" style="margin-bottom:8px;">Tap the instant you see the event occur on your TV broadcast:</div>
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+<button type="button" style="padding:9px; border-radius:8px; border:1px solid var(--border); background:#21262d; color:#fff; font-size:0.8rem; font-weight:700; cursor:pointer;" onclick="syncWhistleOnTv()">⏸️ Whistle on TV</button>
+<button type="button" style="padding:9px; border-radius:8px; border:1px solid var(--border); background:#21262d; color:#fff; font-size:0.8rem; font-weight:700; cursor:pointer;" onclick="syncPuckDropOnTv()">🟢 Puck Drop on TV</button>
+</div>
+<div id="stoppageTapResult" style="font-size:0.76rem; text-align:center; min-height:16px; margin-top:6px; color:var(--text-muted);"></div>
+</div>
 <div class="last-play-box" style="margin-bottom:4px;">
 <div class="last-play-title">
 <span>🏒 Last Official NHL Play</span>
@@ -1659,6 +1668,34 @@ return;
 
 sendQuickDelay(calculatedDelay);
 showToast(`🎯 Synchronised! Broadcast delay set to ${calculatedDelay}s.`);
+};
+window.syncWhistleOnTv = function() {
+const resEl = document.getElementById('stoppageTapResult');
+const now = Date.now();
+const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
+const stopElapsed = (typeof liveClockState.stoppageElapsed === 'number' && liveClockState.stoppageElapsed < 9000) 
+  ? (liveClockState.stoppageElapsed + elapsedSinceSync) : -1;
+if (stopElapsed < 0 || stopElapsed > 300) {
+  if (resEl) resEl.innerHTML = '<span style="color:#f87171;">⚠️ No recent referee whistle detected in arena feed yet.</span>';
+  return;
+}
+sendQuickDelay(stopElapsed);
+if (resEl) resEl.innerHTML = `<span style="color:#4ade80;">🎯 Whistle synchronized! Broadcast delay set to ${stopElapsed}s.</span>`;
+showToast(`🎯 Whistle Synced! Delay: ${stopElapsed}s`);
+};
+window.syncPuckDropOnTv = function() {
+const resEl = document.getElementById('stoppageTapResult');
+const now = Date.now();
+const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
+const resumeElapsed = (typeof liveClockState.resumeElapsed === 'number' && liveClockState.resumeElapsed < 9000) 
+  ? (liveClockState.resumeElapsed + elapsedSinceSync) : -1;
+if (resumeElapsed < 0 || resumeElapsed > 300) {
+  if (resEl) resEl.innerHTML = '<span style="color:#f87171;">⚠️ No recent puck drop / faceoff detected in arena feed yet.</span>';
+  return;
+}
+sendQuickDelay(resumeElapsed);
+if (resEl) resEl.innerHTML = `<span style="color:#4ade80;">🎯 Faceoff synchronized! Broadcast delay set to ${resumeElapsed}s.</span>`;
+showToast(`🎯 Faceoff Synced! Delay: ${resumeElapsed}s`);
 };
 let lastUserDelayChange = 0;
 function updateDelayDisplays(v) {

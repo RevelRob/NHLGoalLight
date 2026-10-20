@@ -470,8 +470,8 @@ private:
   }
 
   bool pollBoxscore(bool &outOpponentGoal, bool &outGameWin, bool &outPeriodStart) {
-    // Query official play-by-play endpoint
-    String url = "https://api-web.nhle.com/v1/gamecenter/" + String(currentStatus.gameId) + "/play-by-play";
+    // Query official play-by-play endpoint with cache-buster parameter to bypass Cloudflare edge cache
+    String url = "https://api-web.nhle.com/v1/gamecenter/" + String(currentStatus.gameId) + "/play-by-play?_=" + String(millis());
 
     WiFiClientSecure client;
     client.setInsecure();
@@ -734,7 +734,7 @@ private:
   }
 
   bool pollLandingFallback(bool &outOpponentGoal, bool &outGameWin, bool &outPeriodStart) {
-    String url = "https://api-web.nhle.com/v1/gamecenter/" + String(currentStatus.gameId) + "/landing";
+    String url = "https://api-web.nhle.com/v1/gamecenter/" + String(currentStatus.gameId) + "/landing?_=" + String(millis());
 
     WiFiClientSecure client;
     client.setInsecure();
