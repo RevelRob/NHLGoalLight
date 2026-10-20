@@ -616,6 +616,7 @@ private:
       // Track referee stoppage & resume transitions
       if (currentStatus.clockRunning && !running) {
         currentStatus.lastStoppageMillis = millis();
+        currentStatus.lastResumeMillis = 0;
         currentStatus.stoppageSecondsRemaining = currentStatus.secondsRemaining;
         eventLog.log("[WHISTLE] P%d stopped at %02d:%02d", currentStatus.period, currentStatus.secondsRemaining / 60, currentStatus.secondsRemaining % 60);
       } else if (!currentStatus.clockRunning && running) {
@@ -625,6 +626,7 @@ private:
           elapsedPlayMs = (unsigned long)(currentStatus.stoppageSecondsRemaining - sec) * 1000UL;
         }
         currentStatus.lastResumeMillis = (millis() > elapsedPlayMs) ? (millis() - elapsedPlayMs) : millis();
+        currentStatus.lastStoppageMillis = 0;
         lastClockTick = millis();
         eventLog.log("[PUCK DROP] P%d resumed at %02d:%02d (stoppage was %lus)", currentStatus.period, currentStatus.secondsRemaining / 60, currentStatus.secondsRemaining % 60, stopDuration);
       }
@@ -838,6 +840,7 @@ private:
 
       if (currentStatus.clockRunning && !running) {
         currentStatus.lastStoppageMillis = millis();
+        currentStatus.lastResumeMillis = 0;
         currentStatus.stoppageSecondsRemaining = currentStatus.secondsRemaining;
         eventLog.log("[WHISTLE] P%d stopped at %02d:%02d", currentStatus.period, currentStatus.secondsRemaining / 60, currentStatus.secondsRemaining % 60);
       } else if (!currentStatus.clockRunning && running) {
@@ -847,6 +850,7 @@ private:
           elapsedPlayMs = (unsigned long)(currentStatus.stoppageSecondsRemaining - sec) * 1000UL;
         }
         currentStatus.lastResumeMillis = (millis() > elapsedPlayMs) ? (millis() - elapsedPlayMs) : millis();
+        currentStatus.lastStoppageMillis = 0;
         lastClockTick = millis();
         eventLog.log("[PUCK DROP] P%d resumed at %02d:%02d (stoppage was %lus)", currentStatus.period, currentStatus.secondsRemaining / 60, currentStatus.secondsRemaining % 60, stopDuration);
       }

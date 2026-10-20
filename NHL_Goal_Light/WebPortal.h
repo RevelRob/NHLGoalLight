@@ -222,7 +222,11 @@ function tickTvClock() {
       const stopElapsed = (typeof liveClockState.stoppageElapsed === 'number' && liveClockState.stoppageElapsed < 9000)
         ? (liveClockState.stoppageElapsed + elapsedSinceSync) : 9999;
       
-      if (stopElapsed >= D) {
+      if (tvClock.secondsRemaining <= stopSec) {
+        tvClock.secondsRemaining = stopSec;
+        tvClock.running = false;
+        tvClock.subsecondAccumulator = 0;
+      } else if (stopElapsed >= D + 20) {
         tvClock.secondsRemaining = stopSec;
         tvClock.running = false;
         tvClock.subsecondAccumulator = 0;
@@ -230,10 +234,6 @@ function tickTvClock() {
         if (!tvClock.running) {
           tvClock.running = true;
           tvClock.subsecondAccumulator = 0;
-        }
-        if (tvClock.secondsRemaining <= stopSec) {
-          tvClock.secondsRemaining = stopSec;
-          tvClock.running = false;
         }
       }
     } else {
