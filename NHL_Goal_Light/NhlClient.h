@@ -620,7 +620,11 @@ private:
         eventLog.log("[WHISTLE] P%d stopped at %02d:%02d", currentStatus.period, currentStatus.secondsRemaining / 60, currentStatus.secondsRemaining % 60);
       } else if (!currentStatus.clockRunning && running) {
         unsigned long stopDuration = (currentStatus.lastStoppageMillis > 0) ? ((millis() - currentStatus.lastStoppageMillis) / 1000UL) : 0;
-        currentStatus.lastResumeMillis = millis();
+        unsigned long elapsedPlayMs = 0;
+        if (currentStatus.stoppageSecondsRemaining > sec && currentStatus.stoppageSecondsRemaining <= 1200) {
+          elapsedPlayMs = (unsigned long)(currentStatus.stoppageSecondsRemaining - sec) * 1000UL;
+        }
+        currentStatus.lastResumeMillis = (millis() > elapsedPlayMs) ? (millis() - elapsedPlayMs) : millis();
         lastClockTick = millis();
         eventLog.log("[PUCK DROP] P%d resumed at %02d:%02d (stoppage was %lus)", currentStatus.period, currentStatus.secondsRemaining / 60, currentStatus.secondsRemaining % 60, stopDuration);
       }
@@ -838,7 +842,11 @@ private:
         eventLog.log("[WHISTLE] P%d stopped at %02d:%02d", currentStatus.period, currentStatus.secondsRemaining / 60, currentStatus.secondsRemaining % 60);
       } else if (!currentStatus.clockRunning && running) {
         unsigned long stopDuration = (currentStatus.lastStoppageMillis > 0) ? ((millis() - currentStatus.lastStoppageMillis) / 1000UL) : 0;
-        currentStatus.lastResumeMillis = millis();
+        unsigned long elapsedPlayMs = 0;
+        if (currentStatus.stoppageSecondsRemaining > sec && currentStatus.stoppageSecondsRemaining <= 1200) {
+          elapsedPlayMs = (unsigned long)(currentStatus.stoppageSecondsRemaining - sec) * 1000UL;
+        }
+        currentStatus.lastResumeMillis = (millis() > elapsedPlayMs) ? (millis() - elapsedPlayMs) : millis();
         lastClockTick = millis();
         eventLog.log("[PUCK DROP] P%d resumed at %02d:%02d (stoppage was %lus)", currentStatus.period, currentStatus.secondsRemaining / 60, currentStatus.secondsRemaining % 60, stopDuration);
       }
