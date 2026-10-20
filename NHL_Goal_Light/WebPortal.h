@@ -1393,146 +1393,178 @@ const liveDelayVal = document.getElementById('liveDelayVal');
 const delaySlider = document.getElementById('delaySlider');
 const delayVal = document.getElementById('delayVal');
 let liveClockState = {
-active: false,
-period: 1,
-officialSeconds: 0,
-running: false,
-inIntermission: false,
-delaySec: 0,
-stoppageSeconds: 0,
-stoppageElapsed: 9999,
-resumeElapsed: 9999,
-lastSyncTime: Date.now()
+  active: false,
+  period: 1,
+  officialSeconds: 0,
+  running: false,
+  inIntermission: false,
+  delaySec: 0,
+  stoppageSeconds: 0,
+  stoppageElapsed: 9999,
+  resumeElapsed: 9999,
+  lastSyncTime: Date.now()
 };
+
+let tvClock = {
+  initialized: false,
+  period: 1,
+  secondsRemaining: 0,
+  running: false,
+  inIntermission: false,
+  lastTickMs: Date.now(),
+  subsecondAccumulator: 0
+};
+
 function parseClockSeconds(str) {
-if (!str || str === '--:--' || str.toLowerCase().indexOf('intermission') >= 0) return 0;
-const parts = str.split(':');
-if (parts.length === 2) {
-const m = parseInt(parts[0]) || 0;
-const s = parseInt(parts[1]) || 0;
-return (m * 60) + s;
+  if (!str || str === '--:--' || str.toLowerCase().indexOf('intermission') >= 0) return 0;
+  const parts = str.split(':');
+  if (parts.length === 2) {
+    const m = parseInt(parts[0]) || 0;
+    const s = parseInt(parts[1]) || 0;
+    return (m * 60) + s;
+  }
+  return 0;
 }
-return 0;
+
+function getCurOfficialSec() {
+  if (!liveClockState.active) return 0;
+  const now = Date.now();
+  const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
+  if (liveClockState.inIntermission || liveClockState.running) {
+    return Math.max(0, liveClockState.officialSeconds - elapsedSinceSync);
+  }
+  return liveClockState.officialSeconds;
 }
+
+function tickTvClock() {
+  const now = Date.now();
+  const dt = Math.max(0, Math.min(1.0, (now - tvClock.lastTickMs) / 1000.0));
+  tvClock.lastTickMs = now;
+
+  if (!liveClockState.active || !tvClock.initialized) return;
+
+  if (tvClock.running) {
+    tvClock.subsecondAccumulator += dt;
+    while (tvClock.subsecondAccumulator >= 1.0) {
+      if (tvClock.secondsRemaining > 0) {
+        tvClock.secondsRemaining -= 1;
+      }
+      tvClock.subsecondAccumulator -= 1.0;
+    }
+  }
+
+  // Automatic Whistle Stop on TV:
+  // When arena is stopped at stoppageSeconds, freeze TV clock once it counts down to stoppageSeconds
+  if (!tvClock.inIntermission && !liveClockState.running) {
+    const stopSec = (typeof liveClockState.stoppageSeconds === 'number' && liveClockState.stoppageSeconds >= 0)
+      ? liveClockState.stoppageSeconds : getCurOfficialSec();
+    if (tvClock.running && tvClock.secondsRemaining <= stopSec) {
+      tvClock.secondsRemaining = stopSec;
+      tvClock.running = false;
+      tvClock.subsecondAccumulator = 0;
+    }
+  }
+
+  // Automatic Faceoff / Play Resume on TV:
+  // When arena has resumed, unfreeze TV clock once resumeElapsed >= delaySec
+  if (!tvClock.inIntermission && liveClockState.running && !tvClock.running) {
+    const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
+    const currentResumeElapsed = (typeof liveClockState.resumeElapsed === 'number' && liveClockState.resumeElapsed < 9000)
+      ? (liveClockState.resumeElapsed + elapsedSinceSync) : 9999;
+    if (currentResumeElapsed >= liveClockState.delaySec) {
+      tvClock.running = true;
+      tvClock.subsecondAccumulator = 0;
+    }
+  }
+
+  renderClockDisplays();
+}
+
+function renderClockDisplays() {
+  if (!liveClockState.active || !tvClock.initialized) return;
+  const now = Date.now();
+  const curOfficialSec = getCurOfficialSec();
+  const D = liveClockState.delaySec;
+
+  if (tvClock.inIntermission) {
+    const offClockEl = document.getElementById('liveOfficialClock');
+    const syncNhlEl = document.getElementById('syncNhlClock');
+    const gameClockEl = document.getElementById('liveGameClock');
+    const targetEl = document.getElementById('liveTargetTvClock');
+    const syncTargetEl = document.getElementById('syncTargetClock');
+    const badgeEl = document.getElementById('liveDelayBadge');
+    const syncBadgeEl = document.getElementById('syncDelayBadge');
+    
+    const iM = Math.floor(curOfficialSec / 60);
+    const iS = curOfficialSec % 60;
+    const iStr = `${iM}:${iS < 10 ? '0' : ''}${iS}`;
+    const intermText = curOfficialSec > 0 ? `INT ${iStr}` : 'Intermission';
+    
+    const tvRemSec = tvClock.secondsRemaining;
+    const tM = Math.floor(tvRemSec / 60);
+    const tS = tvRemSec % 60;
+    const tStr = `${tM}:${tS < 10 ? '0' : ''}${tS}`;
+    const targetIntermText = tvRemSec > 0 ? `INT ${tStr}` : 'Intermission';
+    const badgeDetail = `☕ Intermission (${tStr} on TV)`;
+
+    if (offClockEl) offClockEl.textContent = intermText;
+    if (syncNhlEl) syncNhlEl.textContent = intermText;
+    if (targetEl) targetEl.textContent = targetIntermText;
+    if (syncTargetEl) syncTargetEl.textContent = targetIntermText;
+    if (badgeEl) badgeEl.textContent = badgeDetail;
+    if (syncBadgeEl) syncBadgeEl.textContent = badgeDetail;
+    if (gameClockEl) gameClockEl.textContent = `P${tvClock.period} INT (${tStr})`;
+    return;
+  }
+
+  // Format Official Arena Clock: MM:SS
+  const offM = Math.floor(curOfficialSec / 60);
+  const offS = curOfficialSec % 60;
+  const offStr = `${offM}:${offS < 10 ? '0' : ''}${offS}`;
+  const offClockEl = document.getElementById('liveOfficialClock');
+  if (offClockEl) offClockEl.textContent = offStr;
+  const syncNhlEl = document.getElementById('syncNhlClock');
+  if (syncNhlEl) syncNhlEl.textContent = offStr;
+
+  // Format Target TV Clock: MM:SS
+  const tvM = Math.floor(tvClock.secondsRemaining / 60);
+  const tvS = tvClock.secondsRemaining % 60;
+  const tvStr = `${tvM}:${tvS < 10 ? '0' : ''}${tvS}`;
+  const targetEl = document.getElementById('liveTargetTvClock');
+  if (targetEl) targetEl.textContent = tvStr;
+  const syncTargetEl = document.getElementById('syncTargetClock');
+  if (syncTargetEl) syncTargetEl.textContent = tvStr;
+
+  // Main scoreboard pill
+  const gameClockEl = document.getElementById('liveGameClock');
+  if (gameClockEl) {
+    gameClockEl.textContent = (D > 0) ? `P${tvClock.period} ${tvStr}` : `P${tvClock.period} ${offStr}`;
+  }
+
+  // Status badges
+  let tvStatusSub = '';
+  if (D <= 0) {
+    tvStatusSub = '⚡ Delay: 0s (Instantaneous)';
+  } else if (!tvClock.running) {
+    tvStatusSub = `⏸️ TV Clock Stopped • Delay: ${D}s`;
+  } else {
+    tvStatusSub = `🟢 Active TV Play • Delay: ${D}s`;
+  }
+  const badgeEl = document.getElementById('liveDelayBadge');
+  if (badgeEl) badgeEl.textContent = tvStatusSub;
+  const syncBadgeEl = document.getElementById('syncDelayBadge');
+  if (syncBadgeEl) syncBadgeEl.textContent = tvStatusSub;
+
+  // Diagnostics play lag
+  if (lastPlayTracker.detectedTime > 0) {
+    const playElapsed = Math.max(0, Math.floor((now - lastPlayTracker.detectedTime) / 1000));
+    const diagLag = document.getElementById('diagPlayLag');
+    if (diagLag) diagLag.textContent = playElapsed + 's ago';
+  }
+}
+
 function updateClientClocks() {
-if (!liveClockState.active) return;
-const now = Date.now();
-const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
-const D = liveClockState.delaySec;
-
-if (liveClockState.inIntermission) {
-const offClockEl = document.getElementById('liveOfficialClock');
-const syncNhlEl = document.getElementById('syncNhlClock');
-const gameClockEl = document.getElementById('liveGameClock');
-const targetEl = document.getElementById('liveTargetTvClock');
-const syncTargetEl = document.getElementById('syncTargetClock');
-const badgeEl = document.getElementById('liveDelayBadge');
-const syncBadgeEl = document.getElementById('syncDelayBadge');
-let intermText = 'Intermission';
-let targetIntermText = 'Intermission';
-let badgeDetail = '☕ Intermission in Progress';
-if (liveClockState.officialSeconds > 0) {
-const remSec = Math.max(0, liveClockState.officialSeconds - elapsedSinceSync);
-const iM = Math.floor(remSec / 60);
-const iS = remSec % 60;
-const iStr = `${iM}:${iS < 10 ? '0' : ''}${iS}`;
-intermText = `INT ${iStr}`;
-const targetRemSec = remSec + D;
-const tM = Math.floor(targetRemSec / 60);
-const tS = targetRemSec % 60;
-const tStr = `${tM}:${tS < 10 ? '0' : ''}${tS}`;
-targetIntermText = `INT ${tStr}`;
-badgeDetail = `☕ Intermission (${iStr} remaining)`;
-if (gameClockEl) gameClockEl.textContent = (D > 0) ? `P${liveClockState.period} INT (${tStr})` : `P${liveClockState.period} INT (${iStr})`;
-} else {
-if (gameClockEl) gameClockEl.textContent = `P${liveClockState.period} Intermission`;
-}
-if (offClockEl) offClockEl.textContent = intermText;
-if (syncNhlEl) syncNhlEl.textContent = intermText;
-if (targetEl) targetEl.textContent = targetIntermText;
-if (syncTargetEl) syncTargetEl.textContent = targetIntermText;
-if (badgeEl) badgeEl.textContent = badgeDetail;
-if (syncBadgeEl) syncBadgeEl.textContent = badgeDetail;
-return;
-}
-
-// Compute current official clock
-let curOfficialSec = liveClockState.officialSeconds;
-if (liveClockState.running) {
-curOfficialSec = Math.max(0, liveClockState.officialSeconds - elapsedSinceSync);
-}
-// Format Official Arena Clock: MM:SS
-const offM = Math.floor(curOfficialSec / 60);
-const offS = curOfficialSec % 60;
-const offStr = `${offM}:${offS < 10 ? '0' : ''}${offS}`;
-// Update Official Clock in DOM
-const offClockEl = document.getElementById('liveOfficialClock');
-if (offClockEl) offClockEl.textContent = offStr;
-const syncNhlEl = document.getElementById('syncNhlClock');
-if (syncNhlEl) syncNhlEl.textContent = offStr;
-
-// VIDEO-BUFFER DELAY STATE MACHINE FOR TARGET TV CLOCK:
-const stopElapsed = (typeof liveClockState.stoppageElapsed === 'number') ? (liveClockState.stoppageElapsed + elapsedSinceSync) : 9999;
-const resumeElapsed = (typeof liveClockState.resumeElapsed === 'number') ? (liveClockState.resumeElapsed + elapsedSinceSync) : 9999;
-const stopSec = (typeof liveClockState.stoppageSeconds === 'number' && liveClockState.stoppageSeconds >= 0) ? liveClockState.stoppageSeconds : curOfficialSec;
-
-let targetSec = curOfficialSec;
-let tvStatusSub = '';
-if (D <= 0) {
-targetSec = curOfficialSec;
-tvStatusSub = '⚡ Delay: 0s (Instantaneous)';
-} else if (!liveClockState.running) {
-// Arena is currently STOPPED at whistle time stopSec
-if (stopElapsed < D) {
-// Whistle blew at arena, but play is STILL COUNTING DOWN on TV!
-targetSec = stopSec + (D - stopElapsed);
-tvStatusSub = `⏳ Whistle in ${D - stopElapsed}s on TV • Delay: ${D}s`;
-} else {
-// Whistle has reached TV! TV clock is frozen at whistle time
-targetSec = stopSec;
-tvStatusSub = `⏸️ TV Stopped by Whistle • Delay: ${D}s`;
-}
-} else {
-// Arena is currently RUNNING
-if (resumeElapsed < D) {
-// Puck dropped at arena, but TV is STILL STOPPED in commercial / pre-faceoff!
-targetSec = stopSec;
-tvStatusSub = `⏳ Faceoff in ${D - resumeElapsed}s on TV • Delay: ${D}s`;
-} else {
-// Puck has dropped on TV! Active play on TV
-targetSec = curOfficialSec + D;
-tvStatusSub = `🟢 Active TV Play • Delay: ${D}s`;
-}
-}
-
-const maxSec = (liveClockState.period > 3) ? 300 : 1200;
-if (targetSec > maxSec) targetSec = maxSec;
-if (targetSec < 0) targetSec = 0;
-
-const tvM = Math.floor(targetSec / 60);
-const tvS = targetSec % 60;
-const tvStr = `${tvM}:${tvS < 10 ? '0' : ''}${tvS}`;
-
-const targetEl = document.getElementById('liveTargetTvClock');
-if (targetEl) targetEl.textContent = tvStr;
-const syncTargetEl = document.getElementById('syncTargetClock');
-if (syncTargetEl) syncTargetEl.textContent = tvStr;
-
-// Main scoreboard pill: shows target TV clock when delay buffer D > 0
-const gameClockEl = document.getElementById('liveGameClock');
-if (gameClockEl) gameClockEl.textContent = (D > 0) ? `P${liveClockState.period} ${tvStr}` : `P${liveClockState.period} ${offStr}`;
-
-const badgeEl = document.getElementById('liveDelayBadge');
-if (badgeEl) badgeEl.textContent = tvStatusSub;
-const syncBadgeEl = document.getElementById('syncDelayBadge');
-if (syncBadgeEl) syncBadgeEl.textContent = tvStatusSub;
-
-// Diagnostics play lag
-if (lastPlayTracker.detectedTime > 0) {
-const playElapsed = Math.max(0, Math.floor((now - lastPlayTracker.detectedTime) / 1000));
-const diagLag = document.getElementById('diagPlayLag');
-if (diagLag) diagLag.textContent = playElapsed + 's ago';
-}
+  tickTvClock();
 }
 function showToast(msg) {
 let t = document.getElementById('portalToast');
@@ -1609,146 +1641,170 @@ copyToClipboard(txt)
 .catch(() => showToast('⚠️ Device did not respond. Check connection.'));
 };
 window.applyTvScoreboardMatch = function(source) {
-const isLive = (source === 'live');
-const minIn = document.getElementById(isLive ? 'liveTvMin' : 'tvMatchMinutes');
-const secIn = document.getElementById(isLive ? 'liveTvSec' : 'tvMatchSeconds');
-const resEl = document.getElementById(isLive ? 'liveTvMatchResult' : 'tvMatchResult');
-if (!minIn || !secIn) return;
-const m = parseInt(minIn.value);
-const s = parseInt(secIn.value);
-if (isNaN(m) || isNaN(s) || m < 0 || s < 0 || s > 59) {
-if (resEl) resEl.innerHTML = '<span style="color:#f87171;">⚠️ Please enter valid MM (0-20) and SS (0-59).</span>';
-return;
-}
-const tvTotalSec = (m * 60) + s;
-const now = Date.now();
-const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
-let curOfficial = liveClockState.officialSeconds;
-if (liveClockState.running) {
-curOfficial = Math.max(0, curOfficial - elapsedSinceSync);
-}
-const stopSec = (typeof liveClockState.stoppageSeconds === 'number' && liveClockState.stoppageSeconds >= 0) ? liveClockState.stoppageSeconds : curOfficial;
-const stopElapsed = (typeof liveClockState.stoppageElapsed === 'number') ? (liveClockState.stoppageElapsed + elapsedSinceSync) : 9999;
-const offM = Math.floor(curOfficial / 60);
-const offS = curOfficial % 60;
-const offStr = `${offM}:${offS < 10 ? '0' : ''}${offS}`;
-
-let calculatedDelay = 0;
-
-if (liveClockState.running) {
-// 1. ACTIVE PLAY: Both clocks actively counting down
-calculatedDelay = tvTotalSec - curOfficial;
-if (calculatedDelay < 0) {
-if (resEl) resEl.innerHTML = `<span style="color:#f87171;">⚠️ TV clock (${m}:${s < 10 ? '0' : ''}${s}) is ahead of official clock (${offStr})! In hockey countdown, TV should have more time remaining.</span>`;
-return;
-}
-if (resEl) resEl.innerHTML = `<span style="color:#4ade80;">🎯 TV is ${calculatedDelay}s behind official clock. Broadcast delay set to ${calculatedDelay}s!</span>`;
-} else {
-// 2. STOPPAGE: Arena clock is stopped at stopSec
-if (tvTotalSec === stopSec) {
-// Both arena and TV are stopped at the whistle (commercial break / faceoff setup)
-if (resEl) resEl.innerHTML = `<span style="color:#4ade80;">⏸️ Play is stopped at ${offStr} on both TV and arena.<br>Current broadcast delay (${liveClockState.delaySec}s) is preserved for puck drop. Use presets or slider to adjust.</span>`;
-return;
-} else if (tvTotalSec > stopSec) {
-// Arena stopped, but TV is still counting down towards the whistle!
-const remainingToWhistle = tvTotalSec - stopSec;
-calculatedDelay = stopElapsed + remainingToWhistle;
-if (resEl) resEl.innerHTML = `<span style="color:#4ade80;">🎯 TV is ${remainingToWhistle}s away from whistle at ${offStr}. Broadcast delay set to ${calculatedDelay}s!</span>`;
-} else {
-// TV entered less seconds remaining than where the referee stopped play
-if (resEl) resEl.innerHTML = `<span style="color:#f87171;">⚠️ Referee stopped play at ${offStr}. The clock paused at ${offStr} and cannot reach ${m}:${s < 10 ? '0' : ''}${s} until play resumes.</span>`;
-return;
-}
-}
-
-if (calculatedDelay > 120) {
-if (resEl) resEl.innerHTML = `<span style="color:#f87171;">⚠️ Calculated delay (${calculatedDelay}s) exceeds maximum 120s buffer. Please check period or time entered.</span>`;
-return;
-}
-
-sendQuickDelay(calculatedDelay);
-showToast(`🎯 Synchronised! Broadcast delay set to ${calculatedDelay}s.`);
+  const isLive = (source === 'live');
+  const minIn = document.getElementById(isLive ? 'liveTvMin' : 'tvMatchMinutes');
+  const secIn = document.getElementById(isLive ? 'liveTvSec' : 'tvMatchSeconds');
+  const resEl = document.getElementById(isLive ? 'liveTvMatchResult' : 'tvMatchResult');
+  if (!minIn || !secIn) return;
+  const m = parseInt(minIn.value);
+  const s = parseInt(secIn.value);
+  if (isNaN(m) || isNaN(s) || m < 0 || s < 0 || s > 59) {
+    if (resEl) resEl.innerHTML = '<span style="color:#f87171;">⚠️ Please enter valid MM (0-20) and SS (0-59).</span>';
+    return;
+  }
+  const tvTotalSec = (m * 60) + s;
+  const curOfficial = getCurOfficialSec();
+  
+  // Set TV Clock directly to user entered time
+  tvClock.secondsRemaining = tvTotalSec;
+  tvClock.subsecondAccumulator = 0;
+  
+  let calculatedDelay = 0;
+  if (liveClockState.running) {
+    calculatedDelay = tvTotalSec - curOfficial;
+  } else {
+    const now = Date.now();
+    const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
+    const stopElapsed = (typeof liveClockState.stoppageElapsed === 'number' && liveClockState.stoppageElapsed < 9000)
+      ? (liveClockState.stoppageElapsed + elapsedSinceSync) : 0;
+    const stopSec = (typeof liveClockState.stoppageSeconds === 'number' && liveClockState.stoppageSeconds >= 0)
+      ? liveClockState.stoppageSeconds : curOfficial;
+    if (tvTotalSec >= stopSec) {
+      calculatedDelay = stopElapsed + (tvTotalSec - stopSec);
+    } else {
+      calculatedDelay = stopElapsed;
+    }
+  }
+  
+  if (calculatedDelay < 0) calculatedDelay = 0;
+  if (calculatedDelay > 120) calculatedDelay = 120;
+  
+  sendQuickDelay(calculatedDelay);
+  const tvM = Math.floor(tvTotalSec / 60);
+  const tvS = tvTotalSec % 60;
+  const tvStr = `${tvM}:${tvS < 10 ? '0' : ''}${tvS}`;
+  if (resEl) resEl.innerHTML = `<span style="color:#4ade80;">🎯 TV Clock set to ${tvStr} • Broadcast delay set to ${calculatedDelay}s!</span>`;
+  showToast(`🎯 TV Matched to ${tvStr}! Delay: ${calculatedDelay}s`);
+  renderClockDisplays();
 };
+
 window.syncWhistleOnTv = function() {
-const resEl = document.getElementById('stoppageTapResult');
-const now = Date.now();
-const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
-const stopElapsed = (typeof liveClockState.stoppageElapsed === 'number' && liveClockState.stoppageElapsed < 9000) 
-  ? (liveClockState.stoppageElapsed + elapsedSinceSync) : -1;
-if (stopElapsed < 0 || stopElapsed > 300) {
-  if (resEl) resEl.innerHTML = '<span style="color:#f87171;">⚠️ No recent referee whistle detected in arena feed yet.</span>';
-  return;
-}
-sendQuickDelay(stopElapsed);
-if (resEl) resEl.innerHTML = `<span style="color:#4ade80;">🎯 Whistle synchronized! Broadcast delay set to ${stopElapsed}s.</span>`;
-showToast(`🎯 Whistle Synced! Delay: ${stopElapsed}s`);
+  const resEl = document.getElementById('stoppageTapResult');
+  const now = Date.now();
+  const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
+  const stopElapsed = (typeof liveClockState.stoppageElapsed === 'number' && liveClockState.stoppageElapsed < 9000) 
+    ? (liveClockState.stoppageElapsed + elapsedSinceSync) : -1;
+  if (stopElapsed < 0 || stopElapsed > 300) {
+    if (resEl) resEl.innerHTML = '<span style="color:#f87171;">⚠️ No recent referee whistle detected in arena feed yet.</span>';
+    return;
+  }
+  sendQuickDelay(stopElapsed);
+  const stopSec = (typeof liveClockState.stoppageSeconds === 'number' && liveClockState.stoppageSeconds >= 0)
+    ? liveClockState.stoppageSeconds : getCurOfficialSec();
+  tvClock.secondsRemaining = stopSec;
+  tvClock.running = false;
+  tvClock.subsecondAccumulator = 0;
+  const m = Math.floor(stopSec / 60);
+  const s = stopSec % 60;
+  const sStr = `${m}:${s < 10 ? '0' : ''}${s}`;
+  if (resEl) resEl.innerHTML = `<span style="color:#4ade80;">🎯 Whistle synchronised! Clock paused at ${sStr} • Delay: ${stopElapsed}s</span>`;
+  showToast(`🎯 Whistle Synced at ${sStr}! Delay: ${stopElapsed}s`);
+  renderClockDisplays();
 };
+
 window.syncPuckDropOnTv = function() {
-const resEl = document.getElementById('stoppageTapResult');
-const now = Date.now();
-const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
-const resumeElapsed = (typeof liveClockState.resumeElapsed === 'number' && liveClockState.resumeElapsed < 9000) 
-  ? (liveClockState.resumeElapsed + elapsedSinceSync) : -1;
-if (resumeElapsed < 0 || resumeElapsed > 300) {
-  if (resEl) resEl.innerHTML = '<span style="color:#f87171;">⚠️ No recent puck drop / faceoff detected in arena feed yet.</span>';
-  return;
-}
-sendQuickDelay(resumeElapsed);
-if (resEl) resEl.innerHTML = `<span style="color:#4ade80;">🎯 Faceoff synchronized! Broadcast delay set to ${resumeElapsed}s.</span>`;
-showToast(`🎯 Faceoff Synced! Delay: ${resumeElapsed}s`);
+  const resEl = document.getElementById('stoppageTapResult');
+  const now = Date.now();
+  const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
+  const resumeElapsed = (typeof liveClockState.resumeElapsed === 'number' && liveClockState.resumeElapsed < 9000) 
+    ? (liveClockState.resumeElapsed + elapsedSinceSync) : -1;
+  if (resumeElapsed < 0 || resumeElapsed > 300) {
+    if (resEl) resEl.innerHTML = '<span style="color:#f87171;">⚠️ No recent puck drop / faceoff detected in arena feed yet.</span>';
+    return;
+  }
+  sendQuickDelay(resumeElapsed);
+  const stopSec = (typeof liveClockState.stoppageSeconds === 'number' && liveClockState.stoppageSeconds >= 0)
+    ? liveClockState.stoppageSeconds : getCurOfficialSec();
+  tvClock.secondsRemaining = stopSec;
+  tvClock.running = true;
+  tvClock.subsecondAccumulator = 0;
+  if (resEl) resEl.innerHTML = `<span style="color:#4ade80;">🎯 Faceoff synchronised! Clock resumed • Delay: ${resumeElapsed}s</span>`;
+  showToast(`🎯 Faceoff Synced! Delay: ${resumeElapsed}s`);
+  renderClockDisplays();
 };
+
 let lastUserDelayChange = 0;
 function updateDelayDisplays(v) {
-const txt = (v === 0) ? '0s (Instantaneous)' : v + 's delay';
-if (liveDelayVal) liveDelayVal.textContent = txt;
-if (delayVal) delayVal.textContent = txt;
-if (liveDelaySlider && parseInt(liveDelaySlider.value) !== v) liveDelaySlider.value = v;
-if (delaySlider && parseInt(delaySlider.value) !== v) delaySlider.value = v;
-liveClockState.delaySec = v;
-updateClientClocks();
+  const txt = (v === 0) ? '0s (Instantaneous)' : v + 's delay';
+  if (liveDelayVal) liveDelayVal.textContent = txt;
+  if (delayVal) delayVal.textContent = txt;
+  if (liveDelaySlider && parseInt(liveDelaySlider.value) !== v) liveDelaySlider.value = v;
+  if (delaySlider && parseInt(delaySlider.value) !== v) delaySlider.value = v;
+  liveClockState.delaySec = v;
 }
+
 function sendQuickDelay(v) {
-lastUserDelayChange = Date.now();
-updateDelayDisplays(v);
-fetch('/api/quick-set', {
-method: 'POST',
-headers: {'Content-Type': 'application/json'},
-body: JSON.stringify({ broadcastDelay: v })
-}).catch(console.error);
+  lastUserDelayChange = Date.now();
+  updateDelayDisplays(v);
+  fetch('/api/quick-set', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ broadcastDelay: v })
+  }).catch(console.error);
 }
+
+function onSliderInput(slider) {
+  const v = parseInt(slider.value) || 0;
+  lastUserDelayChange = Date.now();
+  updateDelayDisplays(v);
+  if (tvClock.initialized) {
+    const curOff = getCurOfficialSec();
+    tvClock.secondsRemaining = Math.max(0, curOff + v);
+    tvClock.subsecondAccumulator = 0;
+  }
+  renderClockDisplays();
+}
+
 if (liveDelaySlider) {
-liveDelaySlider.oninput = () => {
-lastUserDelayChange = Date.now();
-updateDelayDisplays(parseInt(liveDelaySlider.value) || 0);
-};
-liveDelaySlider.onchange = () => {
-sendQuickDelay(parseInt(liveDelaySlider.value) || 0);
-};
+  liveDelaySlider.oninput = () => onSliderInput(liveDelaySlider);
+  liveDelaySlider.onchange = () => sendQuickDelay(parseInt(liveDelaySlider.value) || 0);
 }
 if (delaySlider) {
-delaySlider.oninput = () => {
-lastUserDelayChange = Date.now();
-updateDelayDisplays(parseInt(delaySlider.value) || 0);
-};
-delaySlider.onchange = () => {
-sendQuickDelay(parseInt(delaySlider.value) || 0);
-};
+  delaySlider.oninput = () => onSliderInput(delaySlider);
+  delaySlider.onchange = () => sendQuickDelay(parseInt(delaySlider.value) || 0);
 }
+
 window.quickSetPreset = (sec) => {
-sendQuickDelay(sec);
+  if (tvClock.initialized) {
+    const curOff = getCurOfficialSec();
+    tvClock.secondsRemaining = Math.max(0, curOff + sec);
+    tvClock.subsecondAccumulator = 0;
+  }
+  sendQuickDelay(sec);
+  renderClockDisplays();
 };
 window.setBroadcastPreset = (sec) => {
-sendQuickDelay(sec);
+  window.quickSetPreset(sec);
 };
+
 window.quickNudgeDelay = (delta) => {
-let cur = parseInt(liveDelaySlider ? liveDelaySlider.value : (delaySlider ? delaySlider.value : 0)) || 0;
-let v = cur + delta;
-if (v < 0) v = 0;
-if (v > 120) v = 120;
-sendQuickDelay(v);
+  if (!tvClock.initialized) return;
+  lastUserDelayChange = Date.now();
+  // Nudge the user's TV clock directly by delta seconds:
+  tvClock.secondsRemaining = Math.max(0, tvClock.secondsRemaining + delta);
+  tvClock.subsecondAccumulator = 0;
+  
+  // Broadcast delay matches the TV clock offset from official:
+  const curOff = getCurOfficialSec();
+  let newDelay = tvClock.secondsRemaining - curOff;
+  if (newDelay < 0) newDelay = 0;
+  if (newDelay > 120) newDelay = 120;
+  
+  sendQuickDelay(newDelay);
+  renderClockDisplays();
 };
 window.nudgeDelay = (delta) => {
-window.quickNudgeDelay(delta);
+  window.quickNudgeDelay(delta);
 };
 // Expandable Visualiser Drawers
 const activeDrawers = {
@@ -2240,62 +2296,51 @@ const periodChanged = (newPeriod !== liveClockState.period);
 liveClockState.period = newPeriod;
 const newOfficialSec = (typeof s.game.secondsRemaining !== 'undefined' && s.game.secondsRemaining >= 0) ? s.game.secondsRemaining : parseClockSeconds(s.game.timeRemaining);
 const isRunning = !!s.game.running;
-const wasRunning = liveClockState.running;
 const isIntermission = !!s.game.inIntermission;
-const wasIntermission = !!liveClockState.inIntermission;
 liveClockState.inIntermission = isIntermission;
 liveClockState.running = isRunning;
+liveClockState.officialSeconds = newOfficialSec;
 liveClockState.stoppageElapsed = (typeof s.game.stoppageElapsed !== 'undefined') ? s.game.stoppageElapsed : 9999;
 liveClockState.resumeElapsed = (typeof s.game.resumeElapsed !== 'undefined') ? s.game.resumeElapsed : 9999;
 liveClockState.stoppageSeconds = (typeof s.game.stoppageSeconds !== 'undefined') ? s.game.stoppageSeconds : newOfficialSec;
+liveClockState.lastSyncTime = Date.now();
 
-const now = Date.now();
-const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
-const currentBrowserSec = wasRunning ? Math.max(0, liveClockState.officialSeconds - elapsedSinceSync) : liveClockState.officialSeconds;
-
-if (periodChanged || (isIntermission !== wasIntermission)) {
-  // Period transition or entered/exited intermission: snap anchor
-  liveClockState.officialSeconds = newOfficialSec;
-  liveClockState.lastSyncTime = now;
-} else if (isIntermission) {
-  // During intermission: local timer ticks down smoothly 1 sec/sec
-  // Strictly monotonic descending: never jump backwards into the past!
-  const currentIntermSec = Math.max(0, liveClockState.officialSeconds - elapsedSinceSync);
-  if (newOfficialSec < currentIntermSec && (currentIntermSec - newOfficialSec > 3)) {
-    liveClockState.officialSeconds = newOfficialSec;
-    liveClockState.lastSyncTime = now;
-  }
-} else if (!isRunning) {
-  // Arena is stopped by whistle: stay firmly locked at stoppage seconds
-  const stopSec = (typeof s.game.stoppageSeconds === 'number' && s.game.stoppageSeconds >= 0) ? s.game.stoppageSeconds : newOfficialSec;
-  liveClockState.officialSeconds = stopSec;
-  liveClockState.lastSyncTime = now;
-} else {
-  // Arena is running
-  if (!wasRunning) {
-    // Just resumed (puck drop): snap anchor to start of play
-    liveClockState.officialSeconds = newOfficialSec;
-    liveClockState.lastSyncTime = now;
-  } else {
-    // Continuing play: maintain local 1.0s/sec countdown!
-    // Strictly monotonic descending: NEVER jump backwards into the past!
-    // Stale cached CDN responses (newOfficialSec >= currentBrowserSec) are ignored
-    if (newOfficialSec < currentBrowserSec && (currentBrowserSec - newOfficialSec > 3)) {
-      liveClockState.officialSeconds = newOfficialSec;
-      liveClockState.lastSyncTime = now;
-    }
-  }
+// Initialise tvClock on first connection:
+if (!tvClock.initialized) {
+  tvClock.initialized = true;
+  tvClock.period = newPeriod;
+  tvClock.inIntermission = isIntermission;
+  tvClock.running = isRunning;
+  const initialDelay = (typeof s.game.broadcastDelay === 'number') ? s.game.broadcastDelay : 0;
+  liveClockState.delaySec = initialDelay;
+  tvClock.secondsRemaining = Math.max(0, newOfficialSec + (isRunning ? initialDelay : 0));
+  tvClock.lastTickMs = Date.now();
+} else if (periodChanged) {
+  // Period change (P1 -> P2 -> P3):
+  tvClock.period = newPeriod;
+  tvClock.secondsRemaining = newOfficialSec;
+  tvClock.running = isRunning;
+  tvClock.inIntermission = isIntermission;
+  tvClock.subsecondAccumulator = 0;
+} else if (tvClock.inIntermission !== isIntermission) {
+  // Transition into or out of intermission:
+  tvClock.inIntermission = isIntermission;
+  tvClock.secondsRemaining = newOfficialSec;
+  tvClock.running = isIntermission || isRunning;
+  tvClock.subsecondAccumulator = 0;
 }
-// Sync delay settings from hardware if user isn't actively adjusting them
+
+// Sync delay setting from hardware only if user isn't actively adjusting it:
 const userInteracting = (document.activeElement === liveDelaySlider || document.activeElement === delaySlider);
-if (!userInteracting && (Date.now() - lastUserDelayChange > 3000)) {
-if (s.game && typeof s.game.broadcastDelay === 'number') {
-updateDelayDisplays(s.game.broadcastDelay);
-}
+if (!userInteracting && (Date.now() - lastUserDelayChange > 4000)) {
+  if (typeof s.game.broadcastDelay === 'number') {
+    updateDelayDisplays(s.game.broadcastDelay);
+  }
 } else {
-liveClockState.delaySec = parseInt(liveDelaySlider ? liveDelaySlider.value : (delaySlider ? delaySlider.value : 0)) || 0;
+  liveClockState.delaySec = parseInt(liveDelaySlider ? liveDelaySlider.value : (delaySlider ? delaySlider.value : 0)) || 0;
 }
-updateClientClocks();
+
+renderClockDisplays();
 const interm = !!s.game.inIntermission;
 document.getElementById('liveIntermissionNote').style.display = interm ? 'inline' : 'none';
 document.getElementById('liveStatusSubtext').textContent = interm ? 'Intermission in progress.' : (s.game.running ? 'Live play in progress.' : 'Play stopped by whistle.');
@@ -2404,7 +2449,7 @@ lbl.textContent = 'http://' + deriveHostname(devInp.value, deviceMacHostname);
 }
 }).catch(() => {});
 }
-setInterval(updateClientClocks, 1000);
+setInterval(tickTvClock, 100);
 setInterval(refreshStatus, 2500);
 refreshStatus();
 // Live update mDNS label as user types device name

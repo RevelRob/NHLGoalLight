@@ -1035,8 +1035,8 @@ void setupWebServer() {
     json += "\"inIntermission\":" + String(gs.inIntermission ? "true" : "false") + ",";
     json += "\"lastPlay\":\"" + gs.lastPlay + "\",";
     json += "\"broadcastDelay\":" + String(config.broadcast_delay_sec) + ",";
-    unsigned long stopElapsed = (!gs.clockRunning && gs.lastStoppageMillis > 0) ? ((millis() - gs.lastStoppageMillis) / 1000UL) : 9999;
-    unsigned long resumeElapsed = (gs.clockRunning && gs.lastResumeMillis > 0) ? ((millis() - gs.lastResumeMillis) / 1000UL) : 9999;
+    unsigned long stopElapsed = (gs.lastStoppageMillis > 0) ? ((millis() - gs.lastStoppageMillis) / 1000UL) : 9999;
+    unsigned long resumeElapsed = (gs.lastResumeMillis > 0) ? ((millis() - gs.lastResumeMillis) / 1000UL) : 9999;
     unsigned long playElapsed = (gs.lastPlayMillis > 0) ? ((millis() - gs.lastPlayMillis) / 1000UL) : 0;
     String safeApiDate = gs.apiServerDate;
     safeApiDate.replace("\"", "");
