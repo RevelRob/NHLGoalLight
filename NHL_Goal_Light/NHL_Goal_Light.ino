@@ -10,6 +10,7 @@
 
 #include "Config.h"
 #include "Teams.h"
+#include "EventLog.h"
 #include "LedEngine.h"
 #include "AudioEngine.h"
 #include "NhlClient.h"
@@ -22,6 +23,7 @@
 Preferences prefs;
 WebServer server(80);
 DNSServer dnsServer;
+EventLogManager eventLog;
 
 LedEngine leds;
 AudioEngine audio;
@@ -270,6 +272,7 @@ void loop() {
     } else {
       pendingGoalCelebrationTime = now + (config.broadcast_delay_sec * 1000UL);
       Serial.printf("[Event] Goal scored! Celebration held for %d sec (TV broadcast synchronisation)...\n", config.broadcast_delay_sec);
+      eventLog.log("[GOAL] Scored! Delayed %ds for TV", config.broadcast_delay_sec);
     }
   } else if (opponentGoal && config.alert_opponent_goal) {
     if (config.broadcast_delay_sec == 0) {
@@ -277,6 +280,7 @@ void loop() {
     } else {
       pendingOpponentGoalTime = now + (config.broadcast_delay_sec * 1000UL);
       Serial.printf("[Event] Opponent goal! Alert held for %d sec (TV broadcast synchronisation)...\n", config.broadcast_delay_sec);
+      eventLog.log("[OPPONENT GOAL] Delayed %ds for TV", config.broadcast_delay_sec);
     }
   } else if (gameWin && config.alert_game_win) {
     triggerGameWin();
@@ -927,7 +931,7 @@ void setupWebServer() {
         if (bd >= 0 && bd <= 180) {
           config.broadcast_delay_sec = (uint16_t)bd;
           prefs.putUShort("b_delay", config.broadcast_delay_sec);
-          Serial.printf("[Sync] Live Broadcast Delay updated: %d seconds\n", config.broadcast_delay_sec);
+          eventLog.log("[USER] Delay set to %ds", config.broadcast_delay_sec);
         }
       }
 
@@ -939,6 +943,11 @@ void setupWebServer() {
       return;
     }
     server.send(400, "text/plain", "Bad Request");
+  });
+
+  // REST API: Verbose Diagnostics Log
+  server.on("/api/logs", HTTP_GET, []() {
+    server.send(200, "text/plain", eventLog.getText());
   });
 
   // REST API: Test Celebration & Events (supports horn, light, display, event types, effect override, and stop)

@@ -14,16 +14,10 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(<!DOCTYPE html>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="NHL Goal Light">
+<link rel="icon" href="/icon.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-precomposed.png">
-<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="application-name" content="NHL Goal Light">
 <meta name="theme-color" content="#0d1117">
 <link rel="manifest" href="/manifest.json">
-<link rel="icon" type="image/png" sizes="192x192" href="/icon.png">
-<link rel="icon" type="image/png" sizes="32x32" href="/icon.png">
-<link rel="shortcut icon" href="/icon.png">
 <style>
 :root {
 --bg: #0d1117;
@@ -1082,6 +1076,15 @@ box-shadow: 0 12px 36px rgba(0,0,0,0.6);
 <button type="button" class="btn-subtle" style="margin-top:12px; width:100%; padding:9px 12px; font-size:0.8rem; font-weight:600; border-radius:6px; background:#161b22; border:1px solid var(--border); color:var(--text); cursor:pointer;" onclick="copyLiveFeedDebug()">
 📋 Copy Live Feed Data (JSON) to Clipboard
 </button>
+<div style="margin-top:14px; border-top:1px solid var(--border); padding-top:10px;">
+<div style="font-size:0.78rem; font-weight:700; color:var(--text); margin-bottom:4px;">📜 Device Telemetry Event Log</div>
+<textarea id="deviceLogBox" readonly style="width:100%; height:130px; font-family:monospace; font-size:0.72rem; background:#11141a; color:#a6accd; border:1px solid var(--border); border-radius:6px; padding:6px; resize:vertical;" placeholder="Click Refresh to load device telemetry..."></textarea>
+<div style="display:flex; gap:6px; margin-top:6px;">
+<button type="button" class="btn-subtle" style="flex:1; padding:6px; font-size:0.75rem; border-radius:6px; background:#161b22; border:1px solid var(--border); color:var(--text); cursor:pointer;" onclick="fetchDeviceLog()">🔄 Refresh</button>
+<button type="button" class="btn-subtle" style="flex:1; padding:6px; font-size:0.75rem; border-radius:6px; background:#161b22; border:1px solid var(--border); color:var(--text); cursor:pointer;" onclick="copyDeviceLog()">📋 Copy</button>
+<a href="/api/logs" download="goallight-log.txt" style="flex:1; text-align:center; padding:6px; font-size:0.75rem; border-radius:6px; background:#161b22; border:1px solid var(--border); color:var(--text); text-decoration:none; cursor:pointer;">💾 Download</a>
+</div>
+</div>
 </div>
 </div>
 </div>
@@ -1266,7 +1269,6 @@ box-shadow: 0 12px 36px rgba(0,0,0,0.6);
 </div>
 </div>
 <script>
-// 32 NHL Teams with Primary Hex Colours
 const TEAMS = [
 ["ANA", "Anaheim Ducks", "#F47A38"], ["BOS", "Boston Bruins", "#FFB81C"], ["BUF", "Buffalo Sabres", "#002654"],
 ["CGY", "Calgary Flames", "#C8102E"], ["CAR", "Carolina Hurricanes", "#CC0000"], ["CHI", "Chicago Blackhawks", "#CF0A2C"],
@@ -1280,7 +1282,6 @@ const TEAMS = [
 ["UTA", "Utah Hockey Club", "#79CAEC"], ["VAN", "Vancouver Canucks", "#00205B"], ["VGK", "Vegas Golden Knights", "#B4975A"],
 ["WSH", "Washington Capitals", "#041E42"], ["WPG", "Winnipeg Jets", "#041E42"]
 ];
-// Populate Team Select
 const teamSelect = document.getElementById('teamSelect');
 TEAMS.forEach(([abbrev, name]) => {
 const opt = document.createElement('option');
@@ -1288,7 +1289,6 @@ opt.value = abbrev;
 opt.textContent = `${name} (${abbrev})`;
 teamSelect.appendChild(opt);
 });
-// Tab Navigation Switcher
 const navTabs = document.querySelectorAll('.nav-tab');
 const tabPages = document.querySelectorAll('.tab-page');
 let userNavigated = false;
@@ -1306,14 +1306,13 @@ t.classList.remove('active');
 tabPages.forEach(p => {
 if (p.id === 'tab-' + targetTab) {
 p.classList.add('active');
-// Shield tab from touchscreen synthetic click bleed-through
 p.classList.add('just-activated');
 setTimeout(() => p.classList.remove('just-activated'), 300);
 } else {
 p.classList.remove('active');
-p.classList.remove('just-activated');
 }
 });
+if (targetTab === 'sync' && typeof fetchDeviceLog === 'function') fetchDeviceLog();
 }
 navTabs.forEach(tab => {
 tab.addEventListener('click', (e) => {
@@ -1323,7 +1322,6 @@ const targetTab = tab.getAttribute('data-tab');
 switchTab(targetTab);
 });
 });
-// Detect if loaded in AP Setup Mode or inside Captive Network Assistant (CNA) browser
 const currentHost = window.location.hostname.toLowerCase();
 const isLikelyCaptivePortal = (
 currentHost === '192.168.4.1' ||
@@ -1342,7 +1340,6 @@ if (document.activeElement && typeof document.activeElement.blur === 'function')
 document.activeElement.blur();
 }
 });
-// Dynamic Hardware Enablement Engine
 const chkHwLights = document.getElementById('chkHwLights');
 const chkHwSpeaker = document.getElementById('chkHwSpeaker');
 const chkHwDisplay = document.getElementById('chkHwDisplay');
@@ -1363,7 +1360,6 @@ el.setAttribute('data-hw-hidden', !displayOn);
 chkHwLights.onchange = updateHardwareVisibility;
 chkHwSpeaker.onchange = updateHardwareVisibility;
 chkHwDisplay.onchange = updateHardwareVisibility;
-// Sliders
 const brightSlider = document.getElementById('brightSlider');
 const brightVal = document.getElementById('brightVal');
 brightSlider.oninput = () => brightVal.textContent = Math.round((brightSlider.value / 255) * 100) + '%';
@@ -1387,7 +1383,6 @@ body: JSON.stringify({ volume: parseInt(volSlider.value), chirp: true })
 const hornSlider = document.getElementById('hornSlider');
 const hornVal = document.getElementById('hornVal');
 hornSlider.oninput = () => hornVal.textContent = hornSlider.value + 's';
-// Live Delay Controls (Live Tab & Sync Tab Synchronised)
 const liveDelaySlider = document.getElementById('liveDelaySlider');
 const liveDelayVal = document.getElementById('liveDelayVal');
 const delaySlider = document.getElementById('delaySlider');
@@ -1453,8 +1448,6 @@ function tickTvClock() {
     }
   }
 
-  // Automatic Whistle Stop on TV:
-  // When arena is stopped at stoppageSeconds, freeze TV clock once it counts down to stoppageSeconds
   if (!tvClock.inIntermission && !liveClockState.running) {
     const stopSec = (typeof liveClockState.stoppageSeconds === 'number' && liveClockState.stoppageSeconds >= 0)
       ? liveClockState.stoppageSeconds : getCurOfficialSec();
@@ -1465,8 +1458,6 @@ function tickTvClock() {
     }
   }
 
-  // Automatic Faceoff / Play Resume on TV:
-  // When arena has resumed, unfreeze TV clock once resumeElapsed >= delaySec
   if (!tvClock.inIntermission && liveClockState.running && !tvClock.running) {
     const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
     const currentResumeElapsed = (typeof liveClockState.resumeElapsed === 'number' && liveClockState.resumeElapsed < 9000)
@@ -1517,7 +1508,6 @@ function renderClockDisplays() {
     return;
   }
 
-  // Format Official Arena Clock: MM:SS
   const offM = Math.floor(curOfficialSec / 60);
   const offS = curOfficialSec % 60;
   const offStr = `${offM}:${offS < 10 ? '0' : ''}${offS}`;
@@ -1526,7 +1516,6 @@ function renderClockDisplays() {
   const syncNhlEl = document.getElementById('syncNhlClock');
   if (syncNhlEl) syncNhlEl.textContent = offStr;
 
-  // Format Target TV Clock: MM:SS
   const tvM = Math.floor(tvClock.secondsRemaining / 60);
   const tvS = tvClock.secondsRemaining % 60;
   const tvStr = `${tvM}:${tvS < 10 ? '0' : ''}${tvS}`;
@@ -1535,13 +1524,11 @@ function renderClockDisplays() {
   const syncTargetEl = document.getElementById('syncTargetClock');
   if (syncTargetEl) syncTargetEl.textContent = tvStr;
 
-  // Main scoreboard pill
   const gameClockEl = document.getElementById('liveGameClock');
   if (gameClockEl) {
     gameClockEl.textContent = (D > 0) ? `P${tvClock.period} ${tvStr}` : `P${tvClock.period} ${offStr}`;
   }
 
-  // Status badges
   let tvStatusSub = '';
   if (D <= 0) {
     tvStatusSub = '⚡ Delay: 0s (Instantaneous)';
@@ -1555,7 +1542,6 @@ function renderClockDisplays() {
   const syncBadgeEl = document.getElementById('syncDelayBadge');
   if (syncBadgeEl) syncBadgeEl.textContent = tvStatusSub;
 
-  // Diagnostics play lag
   if (lastPlayTracker.detectedTime > 0) {
     const playElapsed = Math.max(0, Math.floor((now - lastPlayTracker.detectedTime) / 1000));
     const diagLag = document.getElementById('diagPlayLag');
@@ -1589,14 +1575,51 @@ containers.forEach(c => { if (c) c.innerHTML = ''; });
 return;
 }
 let html = '<div style="font-size:0.7rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; margin-top:6px; margin-bottom:4px;">📜 Recent Arena Events Timeline:</div>';
-plays.forEach((p) => {
+plays.forEach((p, i) => {
 const esc = (p.desc || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-html += `<div class="recent-play-row" style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:6px; padding:6px 10px; font-size:0.75rem;">
-<strong style="color:var(--text);">${esc}</strong>
+html += `<div style="display:flex; justify-content:space-between; align-items:center; gap:6px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07); border-radius:6px; padding:5px 8px; font-size:0.75rem;">
+<span style="color:var(--text); flex:1;">${esc}</span>
+<button type="button" class="btn-subtle" style="flex:none; padding:2px 7px; font-size:0.7rem; border-radius:4px; background:#21262d; border:1px solid #30363d; color:#58a6ff; cursor:pointer;" onclick="syncToTimelinePlay(${i})" title="Sync TV delay to this exact event">🎯 Sync</button>
 </div>`;
 });
 containers.forEach(c => { if (c) c.innerHTML = html; });
 }
+
+window.syncToTimelinePlay = function(i) {
+const p = cachedRecentPlays[i];
+if (!p) return;
+const m = (p.desc || '').match(/P(\d+)\s+(\d{1,2}):(\d{2})/i);
+let playSec = -1, pNum = 0;
+if (m) {
+pNum = parseInt(m[1], 10);
+playSec = parseInt(m[2], 10) * 60 + parseInt(m[3], 10);
+}
+const d = Math.max(0, Math.min(120, (typeof p.elapsed === 'number') ? p.elapsed : 0));
+sendQuickDelay(d);
+const isStop = /stoppage/i.test(p.desc || '');
+if (playSec >= 0) {
+tvClock.secondsRemaining = playSec;
+tvClock.running = !isStop;
+tvClock.subsecondAccumulator = 0;
+if (pNum > 0) tvClock.period = pNum;
+}
+const rEl = document.getElementById('stoppageTapResult');
+if (rEl) rEl.innerHTML = `<span style="color:#4ade80;">🎯 Synced to ${p.desc}! Delay: ${d}s</span>`;
+showToast(`🎯 Synced to ${p.desc}! Delay: ${d}s`);
+renderClockDisplays();
+};
+
+window.fetchDeviceLog = function() {
+const b = document.getElementById('deviceLogBox');
+if (b) b.value = 'Fetching telemetry logs from device...';
+fetch('/api/logs').then(r => r.text()).then(t => { if (b) b.value = t; }).catch(e => { if (b) b.value = 'Log error: ' + e; });
+};
+
+window.copyDeviceLog = function() {
+const b = document.getElementById('deviceLogBox');
+if (!b || !b.value) return;
+copyToClipboard(b.value).then(() => showToast('📋 Telemetry log copied to clipboard!'));
+};
 let lastPlayTracker = {
 text: '',
 detectedTime: 0
@@ -1655,7 +1678,6 @@ window.applyTvScoreboardMatch = function(source) {
   const tvTotalSec = (m * 60) + s;
   const curOfficial = getCurOfficialSec();
   
-  // Set TV Clock directly to user entered time
   tvClock.secondsRemaining = tvTotalSec;
   tvClock.subsecondAccumulator = 0;
   
@@ -1790,11 +1812,9 @@ window.setBroadcastPreset = (sec) => {
 window.quickNudgeDelay = (delta) => {
   if (!tvClock.initialized) return;
   lastUserDelayChange = Date.now();
-  // Nudge the user's TV clock directly by delta seconds:
   tvClock.secondsRemaining = Math.max(0, tvClock.secondsRemaining + delta);
   tvClock.subsecondAccumulator = 0;
   
-  // Broadcast delay matches the TV clock offset from official:
   const curOff = getCurOfficialSec();
   let newDelay = tvClock.secondsRemaining - curOff;
   if (newDelay < 0) newDelay = 0;
@@ -1806,7 +1826,6 @@ window.quickNudgeDelay = (delta) => {
 window.nudgeDelay = (delta) => {
   window.quickNudgeDelay(delta);
 };
-// Expandable Visualiser Drawers
 const activeDrawers = {
 goal: false,
 opponent: false,
@@ -1828,7 +1847,6 @@ function getTeamColourHex(abbrev) {
 const t = TEAMS.find(item => item[0] === abbrev);
 return t ? t[2] : '#e63946';
 }
-// Common Multi-Canvas LED Renderer Helper
 function drawLedShape(ctx, w, h, nPixels, layout, isReverse, getLedState) {
 ctx.clearRect(0, 0, w, h);
 const cx = w / 2;
@@ -1882,7 +1900,6 @@ const isReverse = document.getElementById('chkLedReverse').checked;
 const teamHex = getTeamColourHex(teamSelect.value);
 const isClassicRed = document.getElementById('chkGoalClassicRed').checked;
 const goalHex = isClassicRed ? '#e63946' : teamHex;
-// 1. Hardware Geometry & Idle Preview on Lights Tab
 const ringCanvas = document.getElementById('ringCanvas');
 if (ringCanvas) {
 const ringCtx = ringCanvas.getContext('2d');
@@ -1920,7 +1937,6 @@ const idleNames = ['Dark / Off', 'Team Colour Breathe', 'Solid Team Accent', 'Ca
 cap.textContent = `${layoutNames[layout] || 'Ring'} (${nPixels} LEDs) • ${idleNames[idleEff] || 'Idle'}`;
 }
 }
-// 2. Goal Celebration Drawer
 if (activeDrawers.goal) {
 const c = document.getElementById('canvas-goal');
 if (c) {
@@ -1968,7 +1984,6 @@ capG.textContent = `${celebNames[effect] || 'Celebration'} in ${colName}`;
 }
 }
 }
-// 3. Opponent Goal Drawer
 if (activeDrawers.opponent) {
 const c = document.getElementById('canvas-opponent');
 if (c) {
@@ -1980,7 +1995,6 @@ alpha: flash ? 0.95 : 0.12
 }));
 }
 }
-// 4. Power Play Drawer
 if (activeDrawers.powerplay) {
 const c = document.getElementById('canvas-powerplay');
 if (c) {
@@ -1993,7 +2007,6 @@ return { fill: '#ffd700', alpha };
 });
 }
 }
-// 5. Period Buzzer Drawer
 if (activeDrawers.buzzer) {
 const c = document.getElementById('canvas-buzzer');
 if (c) {
@@ -2006,7 +2019,6 @@ alpha: buzzFlash ? 1.0 : 0.06
 }));
 }
 }
-// 6. Intermission Drawer
 if (activeDrawers.intermission) {
 const c = document.getElementById('canvas-intermission');
 if (c) {
@@ -2018,7 +2030,6 @@ alpha
 }));
 }
 }
-// 7. Victory Fanfare Drawer
 if (activeDrawers.win) {
 const c = document.getElementById('canvas-win');
 if (c) {
@@ -2036,7 +2047,6 @@ previewStep++;
 requestAnimationFrame(renderAllVisualisers);
 }
 requestAnimationFrame(renderAllVisualisers);
-// Wi-Fi Scanning & Password Controls
 const wifiSelect = document.getElementById('wifiSelect');
 const wifiSsid = document.getElementById('wifiSsid');
 const manualSsidGroup = document.getElementById('manualSsidGroup');
@@ -2142,7 +2152,6 @@ scanPollTimer = setTimeout(() => fetchScan(0), 1000);
 })
 .catch(() => fetchScan(0));
 };
-// Load initial config from ESP32
 fetch('/api/config')
 .then(r => r.json())
 .then(cfg => {
@@ -2196,7 +2205,6 @@ let deviceMacHostname = '';
 function deriveHostname(name, fallback) {
 if (!name || !name.trim()) return fallback || 'goallight.local';
 const trimmed = name.trim();
-// Match "NHL Goal Light X" or "Goal Light X"
 const nhlMatch = trimmed.match(/^(?:NHL\s+Goal\s+Light|Goal\s+Light)(?:\s*[-_ ]*\s*(.*))?$/i);
 if (nhlMatch) {
 const suffix = nhlMatch[1] ? nhlMatch[1].trim() : '';
@@ -2204,15 +2212,12 @@ if (suffix) {
 const slug = suffix.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 return 'goallight-' + slug + '.local';
 } else {
-// Exactly "NHL Goal Light" -> return fallback with MAC if available
 return fallback || 'goallight.local';
 }
 }
-// Generic custom name (e.g. "Man Cave" -> "man-cave.local")
 const slug = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 return (slug || 'goallight') + '.local';
 }
-// Upcoming Game View Switcher
 window.setUpcomingView = function(view) {
 const isSimple = (view === 'simple');
 const btnS = document.getElementById('btnViewSimple');
@@ -2224,7 +2229,6 @@ if (btnD) btnD.classList.toggle('active', !isSimple);
 if (simV) simV.style.display = isSimple ? 'block' : 'none';
 if (detV) detV.style.display = isSimple ? 'none' : 'block';
 };
-// Live Game & Status Polling
 function refreshStatus() {
 fetch('/api/status')
 .then(r => r.json())
@@ -2233,7 +2237,6 @@ const badge = document.getElementById('statusBadge');
 if (s.system && s.system.deviceName) {
 document.getElementById('titleDeviceName').textContent = '🚨 ' + s.system.deviceName;
 }
-// If in AP Setup Mode and user has not intentionally navigated to another tab, stay on system tab
 if (!userNavigated && s.system && s.system.isApMode) {
 switchTab('system');
 }
@@ -2246,7 +2249,6 @@ document.getElementById('liveAwayTeam').textContent = s.game.awayAbbrev || 'AWY'
 document.getElementById('liveAwayScore').textContent = s.game.awayScore;
 document.getElementById('liveHomeTeam').textContent = s.game.homeAbbrev || 'HME';
 document.getElementById('liveHomeScore').textContent = s.game.homeScore;
-// Track Last Play & arrival timing
 const playText = s.game.lastPlay || '';
 if (playText && playText !== lastPlayTracker.text) {
 lastPlayTracker.text = playText;
@@ -2268,7 +2270,6 @@ if (offPerEl) offPerEl.textContent = `Period ${s.game.period}`;
 const syncNhlPer = document.getElementById('syncNhlPeriod');
 if (syncNhlPer) syncNhlPer.textContent = `Period ${s.game.period}`;
 if (s.game && s.game.recentPlays) renderRecentPlaysTimeline(s.game.recentPlays);
-// Real-Time Clock & Cloud Diagnostics
 if (s.game.espEpoch) {
 const d = new Date(s.game.espEpoch * 1000);
 const diagDev = document.getElementById('diagDeviceTime');
@@ -2289,7 +2290,6 @@ if (typeof s.game.apiAge !== 'undefined') {
 const diagAge = document.getElementById('diagCacheAge');
 if (diagAge) diagAge.textContent = s.game.apiAge + 's';
 }
-// Synchronise client clock timeline engine with ESP32 status
 liveClockState.active = true;
 const newPeriod = s.game.period || 1;
 const periodChanged = (newPeriod !== liveClockState.period);
@@ -2305,7 +2305,6 @@ liveClockState.resumeElapsed = (typeof s.game.resumeElapsed !== 'undefined') ? s
 liveClockState.stoppageSeconds = (typeof s.game.stoppageSeconds !== 'undefined') ? s.game.stoppageSeconds : newOfficialSec;
 liveClockState.lastSyncTime = Date.now();
 
-// Initialise tvClock on first connection:
 if (!tvClock.initialized) {
   tvClock.initialized = true;
   tvClock.period = newPeriod;
@@ -2316,21 +2315,18 @@ if (!tvClock.initialized) {
   tvClock.secondsRemaining = Math.max(0, newOfficialSec + (isRunning ? initialDelay : 0));
   tvClock.lastTickMs = Date.now();
 } else if (periodChanged) {
-  // Period change (P1 -> P2 -> P3):
   tvClock.period = newPeriod;
   tvClock.secondsRemaining = newOfficialSec;
   tvClock.running = isRunning;
   tvClock.inIntermission = isIntermission;
   tvClock.subsecondAccumulator = 0;
 } else if (tvClock.inIntermission !== isIntermission) {
-  // Transition into or out of intermission:
   tvClock.inIntermission = isIntermission;
   tvClock.secondsRemaining = newOfficialSec;
   tvClock.running = isIntermission || isRunning;
   tvClock.subsecondAccumulator = 0;
 }
 
-// Sync delay setting from hardware only if user isn't actively adjusting it:
 const userInteracting = (document.activeElement === liveDelaySlider || document.activeElement === delaySlider);
 if (!userInteracting && (Date.now() - lastUserDelayChange > 4000)) {
   if (typeof s.game.broadcastDelay === 'number') {
@@ -2379,7 +2375,6 @@ const targetEl = document.getElementById('liveTargetTvClock');
 if (targetEl) targetEl.textContent = '--:--';
 document.getElementById('liveStatusSubtext').textContent = 'Configure home Wi-Fi to start.';
 }
-// Upcoming Game Details (Simple & Detailed Views)
 if (s.upcoming && s.upcoming.valid) {
 const up = s.upcoming;
 const isHome = !!up.isHome;
@@ -2407,7 +2402,6 @@ document.getElementById('upSimpleDate').textContent = dateStr;
 document.getElementById('upSimpleTime').textContent = timeStr || 'Time TBA';
 document.getElementById('upSimpleVenue').textContent = '📍 ' + (up.venue || 'Arena TBD');
 document.getElementById('upSimpleBroadcasts').textContent = '📺 ' + (up.broadcasts || 'TV TBA');
-// Detailed view fields
 document.getElementById('upDetMatchupTitle').textContent = `${awayAbbrev} @ ${homeAbbrev} (${oppName})`;
 const badgeEl = document.getElementById('upDetHomeAwayBadge');
 if (badgeEl) {
@@ -2441,7 +2435,6 @@ if (s.system.hostname) {
 deviceMacHostname = s.system.hostname;
 const lbl = document.getElementById('lblMdnsUrl');
 const devInp = document.getElementById('deviceNameInput');
-// Only update if user is not actively editing the name field
 if (lbl && devInp && document.activeElement !== devInp) {
 lbl.textContent = 'http://' + deriveHostname(devInp.value, deviceMacHostname);
 }
@@ -2452,7 +2445,6 @@ lbl.textContent = 'http://' + deriveHostname(devInp.value, deviceMacHostname);
 setInterval(tickTvClock, 100);
 setInterval(refreshStatus, 2500);
 refreshStatus();
-// Live update mDNS label as user types device name
 const devInput = document.getElementById('deviceNameInput');
 if (devInput) {
 devInput.oninput = function() {
@@ -2460,7 +2452,6 @@ const lbl = document.getElementById('lblMdnsUrl');
 if (lbl) lbl.textContent = 'http://' + deriveHostname(this.value, deviceMacHostname || 'goallight.local');
 };
 }
-// Event Simulator Studio (Dedicated Testing Controls)
 const simEvent = document.getElementById('simEventSelect');
 const simEffectGroup = document.getElementById('simEffectGroup');
 const simEffect = document.getElementById('simEffectSelect');
@@ -2500,7 +2491,6 @@ body: JSON.stringify({ event: 'stop' })
 }).catch(console.error);
 };
 }
-// Save & Reboot Flow
 const saveModal = document.getElementById('saveModal');
 const modalIcon = document.getElementById('modalIcon');
 const modalTitle = document.getElementById('modalTitle');
@@ -2600,7 +2590,6 @@ modalBar.style.width = '100%';
 modalBtn.style.display = 'block';
 });
 };
-// Firmware & GitHub Updates
 const btnCheckUpdate = document.getElementById('btnCheckUpdate');
 const updateInfo = document.getElementById('updateInfo');
 const otaFile = document.getElementById('otaFile');
@@ -2608,7 +2597,6 @@ const btnOtaUpload = document.getElementById('btnOtaUpload');
 const otaProgress = document.getElementById('otaProgress');
 const otaBar = document.getElementById('otaBar');
 const otaText = document.getElementById('otaText');
-// Helper: Parse semver / quad-ver strings like "v1.1.0.1" into [1, 1, 0, 1]
 function parseSemVer(vStr) {
 if (!vStr) return [0, 0, 0, 0];
 const cleaned = vStr.replace(/^v/i, '').trim();
@@ -2700,7 +2688,6 @@ btn1Click.disabled = true;
 updateInfo.innerHTML = `<strong>⚡ Installing ${latestTag} directly from Cloud...</strong><br>` +
 `<span id="cloudStatusText" style="font-size:0.82rem; color:var(--text-muted);">Connecting to firmware server...</span><br><br>` +
 `<div style="background:var(--border); border-radius:6px; height:12px; overflow:hidden;"><div id="cloudBar" style="background:var(--accent); height:100%; width:0%; transition:width 0.3s ease;"></div></div>`;
-// Use direct CDN URL for reliable high speed download without redirects
 const directUrl = 'https://revelrob.github.io/NHLGoalLight/builds/firmware.bin';
 fetch('/api/ota-cloud', {
 method: 'POST',
@@ -2710,7 +2697,6 @@ body: JSON.stringify({ url: directUrl })
 if (!data.success) {
 throw new Error(data.message || 'Failed to start cloud update');
 }
-// Start real-time progress polling
 const pollInterval = setInterval(() => {
 fetch('/api/ota-status')
 .then(r => r.json())
@@ -2740,7 +2726,6 @@ btn1Click.disabled = false;
 }
 })
 .catch(() => {
-// Device may have rebooted after flash success
 setTimeout(() => window.location.reload(), 4000);
 });
 }, 600);
@@ -2811,7 +2796,6 @@ btnOtaUpload.disabled = false;
 };
 xhr.send(formData);
 };
-// Diagnostics: Reboot Button
 document.getElementById('btnRestartDevice').onclick = () => {
 if (confirm('Reboot the Goal Light now?')) {
 fetch('/api/config', {

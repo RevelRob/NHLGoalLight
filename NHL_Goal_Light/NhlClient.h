@@ -3,6 +3,7 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include "Config.h"
+#include "EventLog.h"
 
 enum NhlGameState {
   STATE_UNKNOWN,
@@ -616,11 +617,12 @@ private:
       if (currentStatus.clockRunning && !running) {
         currentStatus.lastStoppageMillis = millis();
         currentStatus.stoppageSecondsRemaining = currentStatus.secondsRemaining;
-        Serial.printf("[Clock] Referee stoppage at %02d:%02d\n", currentStatus.secondsRemaining / 60, currentStatus.secondsRemaining % 60);
+        eventLog.log("[WHISTLE] P%d stopped at %02d:%02d", currentStatus.period, currentStatus.secondsRemaining / 60, currentStatus.secondsRemaining % 60);
       } else if (!currentStatus.clockRunning && running) {
+        unsigned long stopDuration = (currentStatus.lastStoppageMillis > 0) ? ((millis() - currentStatus.lastStoppageMillis) / 1000UL) : 0;
         currentStatus.lastResumeMillis = millis();
-        lastClockTick = millis(); // Anchor local ticker accumulator to exact puck drop
-        Serial.printf("[Clock] Play resumed at %02d:%02d\n", currentStatus.secondsRemaining / 60, currentStatus.secondsRemaining % 60);
+        lastClockTick = millis();
+        eventLog.log("[PUCK DROP] P%d resumed at %02d:%02d (stoppage was %lus)", currentStatus.period, currentStatus.secondsRemaining / 60, currentStatus.secondsRemaining % 60, stopDuration);
       }
 
       currentStatus.clockRunning = running;
@@ -833,9 +835,12 @@ private:
       if (currentStatus.clockRunning && !running) {
         currentStatus.lastStoppageMillis = millis();
         currentStatus.stoppageSecondsRemaining = currentStatus.secondsRemaining;
+        eventLog.log("[WHISTLE] P%d stopped at %02d:%02d", currentStatus.period, currentStatus.secondsRemaining / 60, currentStatus.secondsRemaining % 60);
       } else if (!currentStatus.clockRunning && running) {
+        unsigned long stopDuration = (currentStatus.lastStoppageMillis > 0) ? ((millis() - currentStatus.lastStoppageMillis) / 1000UL) : 0;
         currentStatus.lastResumeMillis = millis();
         lastClockTick = millis();
+        eventLog.log("[PUCK DROP] P%d resumed at %02d:%02d (stoppage was %lus)", currentStatus.period, currentStatus.secondsRemaining / 60, currentStatus.secondsRemaining % 60, stopDuration);
       }
 
       currentStatus.clockRunning = running;

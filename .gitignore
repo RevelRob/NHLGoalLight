@@ -9,6 +9,8 @@
 *.elf
 *.map
 !docs/builds/*.bin
+!web_flasher/builds/*.bin
+NHL_Goal_Light/build/
 
 
 
