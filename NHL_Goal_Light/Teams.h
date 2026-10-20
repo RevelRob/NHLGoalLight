@@ -35,7 +35,7 @@ const TeamData NHL_TEAMS[] = {
   {"NYR", "New York Rangers",        0,  56, 168,  206,  17,  38},
   {"OTT", "Ottawa Senators",       200,  16,  46,  214, 159,  61},
   {"PHI", "Philadelphia Flyers",   247,  73,   2,    0,   0,   0},
-  {"PIT", "Pittsburgh Penguins",     0,   0,   0,  252, 181,  20},
+  {"PIT", "Pittsburgh Penguins",   252, 181,  20,    0,   0,   0},
   {"SJS", "San Jose Sharks",         0, 109, 117,  234, 114,   0},
   {"SEA", "Seattle Kraken",          0,  22,  40,  153, 217, 217},
   {"STL", "St. Louis Blues",         0,  47, 135,  252, 181,  20},

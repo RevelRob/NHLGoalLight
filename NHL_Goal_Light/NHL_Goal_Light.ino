@@ -266,21 +266,31 @@ void loop() {
 
   bool preferredGoal = nhl.poll(opponentGoal, gameWin, periodStart);
 
-  if (preferredGoal) {
-    if (config.broadcast_delay_sec == 0) {
-      triggerGoalCelebration();
-    } else {
-      pendingGoalCelebrationTime = now + (config.broadcast_delay_sec * 1000UL);
-      Serial.printf("[Event] Goal scored! Celebration held for %d sec (TV broadcast synchronisation)...\n", config.broadcast_delay_sec);
-      eventLog.log("[GOAL] Scored! Delayed %ds for TV", config.broadcast_delay_sec);
+  if (preferredGoal || (opponentGoal && config.alert_opponent_goal)) {
+    unsigned long elapsedSinceGoalMs = 0;
+    if (nhl.getStatus().lastStoppageMillis > 0 && (now >= nhl.getStatus().lastStoppageMillis)) {
+      elapsedSinceGoalMs = now - nhl.getStatus().lastStoppageMillis;
+      if (elapsedSinceGoalMs > 120000UL) elapsedSinceGoalMs = 0;
     }
-  } else if (opponentGoal && config.alert_opponent_goal) {
-    if (config.broadcast_delay_sec == 0) {
-      triggerOpponentGoal();
+    long remainingDelayMs = ((long)config.broadcast_delay_sec * 1000L) - (long)elapsedSinceGoalMs;
+    int logSec = (remainingDelayMs > 0) ? (int)((remainingDelayMs + 500) / 1000) : 0;
+
+    if (preferredGoal) {
+      if (config.broadcast_delay_sec == 0 || remainingDelayMs <= 0) {
+        triggerGoalCelebration();
+      } else {
+        pendingGoalCelebrationTime = now + (unsigned long)remainingDelayMs;
+        Serial.printf("[Event] Goal scored! Celebration held for %ld ms (TV broadcast sync, %lu ms since whistle)...\n", remainingDelayMs, elapsedSinceGoalMs);
+        eventLog.log("[GOAL] Scored! Delayed %ds for TV", logSec);
+      }
     } else {
-      pendingOpponentGoalTime = now + (config.broadcast_delay_sec * 1000UL);
-      Serial.printf("[Event] Opponent goal! Alert held for %d sec (TV broadcast synchronisation)...\n", config.broadcast_delay_sec);
-      eventLog.log("[OPPONENT GOAL] Delayed %ds for TV", config.broadcast_delay_sec);
+      if (config.broadcast_delay_sec == 0 || remainingDelayMs <= 0) {
+        triggerOpponentGoal();
+      } else {
+        pendingOpponentGoalTime = now + (unsigned long)remainingDelayMs;
+        Serial.printf("[Event] Opponent goal! Alert held for %ld ms (TV broadcast sync, %lu ms since whistle)...\n", remainingDelayMs, elapsedSinceGoalMs);
+        eventLog.log("[OPPONENT GOAL] Delayed %ds for TV", logSec);
+      }
     }
   } else if (gameWin && config.alert_game_win) {
     triggerGameWin();
