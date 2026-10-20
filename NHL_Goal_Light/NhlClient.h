@@ -91,7 +91,7 @@ public:
     currentStatus.awayScore = 0;
     currentStatus.period = 0;
     currentStatus.timeRemaining = "--:--";
-    currentStatus.secondsRemaining = 1200;
+    currentStatus.secondsRemaining = 0;
     currentStatus.clockRunning = false;
     currentStatus.inIntermission = false;
     currentStatus.lastPlay = "";
@@ -102,7 +102,7 @@ public:
     currentStatus.apiCacheAge = 0;
     currentStatus.lastStoppageMillis = 0;
     currentStatus.lastResumeMillis = 0;
-    currentStatus.stoppageSecondsRemaining = 1200;
+    currentStatus.stoppageSecondsRemaining = 0;
     currentStatus.recentPlayCount = 0;
     upcoming.valid = false;
   }
@@ -119,7 +119,7 @@ public:
     currentStatus.state = STATE_UNKNOWN;
     currentStatus.gameId = 0;
     currentStatus.timeRemaining = "--:--";
-    currentStatus.secondsRemaining = 1200;
+    currentStatus.secondsRemaining = 0;
     currentStatus.clockRunning = false;
     currentStatus.inIntermission = false;
     currentStatus.lastPlay = "";
@@ -132,7 +132,7 @@ public:
     currentStatus.apiCacheAge = 0;
     currentStatus.lastStoppageMillis = 0;
     currentStatus.lastResumeMillis = 0;
-    currentStatus.stoppageSecondsRemaining = 1200;
+    currentStatus.stoppageSecondsRemaining = 0;
     lastClockTick = 0;
     upcoming.valid = false;
     pollIntervalMs = 2000;
