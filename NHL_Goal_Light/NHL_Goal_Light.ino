@@ -259,7 +259,6 @@ void loop() {
     }
   }
 
-  // 8. Poll NHL Web API
   bool opponentGoal = false;
   bool gameWin = false;
   bool periodStart = false;
@@ -295,12 +294,21 @@ void loop() {
         eventLog.log("[OPPONENT GOAL] Delayed %ds for TV", logSec);
       }
     }
-  } else if (gameWin && config.alert_game_win) {
+  }
+
+  if (gameWin && config.alert_game_win) {
     triggerGameWin();
-  } else if (periodStart && config.alert_period_buzzer) {
-    if (config.hw_speaker_enabled) {
+    eventLog.log("[WIN] Final Victory Celebration!");
+  }
+
+  if (periodStart && config.alert_period_buzzer) {
+    if (config.hw_speaker_enabled && config.alert_period_buzzer_sound) {
       audio.play(TRACK_PERIOD_HORN);
     }
+    if (config.hw_lights_enabled) {
+      leds.setMode(LED_STROBE_GOAL, 2500);
+    }
+    eventLog.log("[PERIOD] Arena Buzzer / Period Action");
   }
 }
 
@@ -337,11 +345,18 @@ void triggerOpponentGoal() {
 
 void triggerGameWin() {
   Serial.println("[Event] VICTORY CELEBRATION!");
-  if (config.hw_speaker_enabled) {
+  if (config.hw_speaker_enabled && config.alert_game_win_sound) {
     audio.play(TRACK_WIN_FANFARE);
   }
   if (config.hw_lights_enabled) {
-    leds.setMode(LED_VICTORY_RAINBOW, 20000);
+    LedMode mode = LED_VICTORY_RAINBOW;
+    switch (config.alert_game_win_effect) {
+      case 0: mode = LED_VICTORY_RAINBOW; break;
+      case 1: mode = LED_BEACON_GOAL; break;
+      case 2: mode = LED_STROBE_GOAL; break;
+      default: mode = LED_VICTORY_RAINBOW; break;
+    }
+    leds.setMode(mode, 20000);
   }
 }
 
@@ -861,6 +876,7 @@ void setupWebServer() {
       int bdPos = body.indexOf("\"broadcastDelay\":");
       if (bdPos >= 0) {
         config.broadcast_delay_sec = (uint16_t)body.substring(bdPos + 17).toInt();
+        nhl.setBroadcastDelay(config.broadcast_delay_sec);
       }
 
       // Wi-Fi Credentials
@@ -943,6 +959,7 @@ void setupWebServer() {
         int bd = body.substring(bdPos + 17).toInt();
         if (bd >= 0 && bd <= 180) {
           config.broadcast_delay_sec = (uint16_t)bd;
+          nhl.setBroadcastDelay(config.broadcast_delay_sec);
           prefs.putUShort("b_delay", config.broadcast_delay_sec);
           eventLog.log("[USER] Delay set to %ds", config.broadcast_delay_sec);
         }
@@ -1228,6 +1245,7 @@ void loadConfiguration() {
   config.alert_game_win_sound = prefs.getBool("win_snd", true);
 
   config.broadcast_delay_sec = prefs.getUShort("b_delay", 0);
+  nhl.setBroadcastDelay(config.broadcast_delay_sec);
 
   prefs.end();
   Serial.println("[Config] Settings loaded from NVS flash.");

@@ -76,6 +76,9 @@ private:
   unsigned long pollIntervalMs;
   unsigned long lastClockTick;
   bool initialSnapshot;
+  uint16_t broadcastDelaySec;
+  unsigned long finalDetectedMillis;
+  bool winCelebrated;
 
 public:
   NhlClient() : teamAbbrev("TOR"),
@@ -84,7 +87,10 @@ public:
                 lastPollTime(0),
                 pollIntervalMs(2000),
                 lastClockTick(0),
-                initialSnapshot(true) {
+                initialSnapshot(true),
+                broadcastDelaySec(0),
+                finalDetectedMillis(0),
+                winCelebrated(false) {
     currentStatus.state = STATE_UNKNOWN;
     currentStatus.gameId = 0;
     currentStatus.homeScore = 0;
@@ -112,6 +118,10 @@ public:
     reset();
   }
 
+  void setBroadcastDelay(uint16_t delaySec) {
+    broadcastDelaySec = delaySec;
+  }
+
   void reset() {
     lastWatchedScore = -1;
     lastOpponentScore = -1;
@@ -136,6 +146,8 @@ public:
     lastClockTick = 0;
     upcoming.valid = false;
     pollIntervalMs = 2000;
+    finalDetectedMillis = 0;
+    winCelebrated = false;
   }
 
   const GameStatus& getStatus() const { return currentStatus; }
@@ -192,7 +204,7 @@ public:
     }
 
     // Step 1: If game ID is not discovered or game is finished, discover game
-    if (currentStatus.gameId == 0 || currentStatus.state == STATE_FINAL || currentStatus.state == STATE_NO_GAME) {
+    if (currentStatus.gameId == 0 || (currentStatus.state == STATE_FINAL && finalDetectedMillis == 0) || currentStatus.state == STATE_NO_GAME) {
       discoverGame();
       adjustInterval();
       return false;
@@ -216,7 +228,8 @@ private:
         break;
       case STATE_LIVE:
         // Fast 3-second polling during active play, 15s during intermission
-        pollIntervalMs = currentStatus.inIntermission ? 15000 : 3000;
+        // If final conclusion is buffering for TV delay, keep 3s polling until delay expires
+        pollIntervalMs = (finalDetectedMillis > 0) ? 3000 : (currentStatus.inIntermission ? 15000 : 3000);
         break;
       case STATE_FINAL:
         pollIntervalMs = 60000UL * 30; // 30 min
@@ -470,6 +483,39 @@ private:
     return prefix + "Play in Progress";
   }
 
+  void updateGameState(const String &stateStr) {
+    if (stateStr == "FUT") currentStatus.state = STATE_FUTURE;
+    else if (stateStr == "PRE") currentStatus.state = STATE_PREGAME;
+    else if (stateStr == "LIVE" || stateStr == "CRIT") currentStatus.state = STATE_LIVE;
+    else if (stateStr == "FINAL" || stateStr == "OFF" || stateStr == "OVER") {
+      if (currentStatus.state == STATE_LIVE) {
+        if (finalDetectedMillis == 0) finalDetectedMillis = millis();
+        if (millis() - finalDetectedMillis >= (unsigned long)broadcastDelaySec * 1000UL) {
+          currentStatus.state = STATE_FINAL;
+          finalDetectedMillis = 0;
+        }
+      } else {
+        currentStatus.state = STATE_FINAL;
+      }
+    }
+    if (currentStatus.state != STATE_FINAL) {
+      finalDetectedMillis = 0;
+      winCelebrated = false;
+    }
+  }
+
+  void checkVictory(bool &outGameWin, int watchedScore, int opponentScore) {
+    if (currentStatus.state == STATE_FINAL && !winCelebrated) {
+      if (watchedScore > opponentScore) {
+        outGameWin = true;
+        winCelebrated = true;
+        Serial.printf("[NHL] VICTORY! (%d - %d)\n", watchedScore, opponentScore);
+      }
+    } else if (currentStatus.state == STATE_LIVE) {
+      winCelebrated = false;
+    }
+  }
+
   bool pollBoxscore(bool &outOpponentGoal, bool &outGameWin, bool &outPeriodStart) {
     // Query official play-by-play endpoint with cache-buster parameter to bypass Cloudflare edge cache
     String url = "https://api-web.nhle.com/v1/gamecenter/" + String(currentStatus.gameId) + "/play-by-play?_=" + String(millis());
@@ -542,10 +588,7 @@ private:
 
     // Parse gameState
     String stateStr = extractString(headBlock, "\"gameState\":\"", 0);
-    if (stateStr == "FUT") currentStatus.state = STATE_FUTURE;
-    else if (stateStr == "PRE") currentStatus.state = STATE_PREGAME;
-    else if (stateStr == "LIVE" || stateStr == "CRIT") currentStatus.state = STATE_LIVE;
-    else if (stateStr == "FINAL" || stateStr == "OFF") currentStatus.state = STATE_FINAL;
+    updateGameState(stateStr);
 
     // Parse teams and scores
     String homeBlock = extractObject(headBlock, "\"homeTeam\":", 0);
@@ -581,6 +624,9 @@ private:
           // New period started: snap clock immediately
           currentStatus.secondsRemaining = sec;
           lastClockTick = millis();
+          if (currentStatus.period > 1) {
+            outPeriodStart = true;
+          }
         } else if (interm) {
           if (!wasInterm || currentStatus.secondsRemaining == 0) {
             // Transitioned into intermission: snap to intermission timer
@@ -729,12 +775,7 @@ private:
       outOpponentGoal = true;
     }
 
-    // Check for victory condition on FINAL
-    if (currentStatus.state == STATE_FINAL && (lastWatchedScore != watchedScore || lastOpponentScore != opponentScore)) {
-      if (watchedScore > opponentScore) {
-        outGameWin = true;
-      }
-    }
+    checkVictory(outGameWin, watchedScore, opponentScore);
 
     lastWatchedScore = watchedScore;
     lastOpponentScore = opponentScore;
@@ -774,10 +815,7 @@ private:
     http.end();
 
     String stateStr = extractString(payload, "\"gameState\":\"", 0);
-    if (stateStr == "FUT") currentStatus.state = STATE_FUTURE;
-    else if (stateStr == "PRE") currentStatus.state = STATE_PREGAME;
-    else if (stateStr == "LIVE" || stateStr == "CRIT") currentStatus.state = STATE_LIVE;
-    else if (stateStr == "FINAL" || stateStr == "OFF") currentStatus.state = STATE_FINAL;
+    updateGameState(stateStr);
 
     String homeBlock = extractObject(payload, "\"homeTeam\":", 0);
     String awayBlock = extractObject(payload, "\"awayTeam\":", 0);
@@ -908,11 +946,7 @@ private:
       outOpponentGoal = true;
     }
 
-    if (currentStatus.state == STATE_FINAL && (lastWatchedScore != watchedScore || lastOpponentScore != opponentScore)) {
-      if (watchedScore > opponentScore) {
-        outGameWin = true;
-      }
-    }
+    checkVictory(outGameWin, watchedScore, opponentScore);
 
     lastWatchedScore = watchedScore;
     lastOpponentScore = opponentScore;
