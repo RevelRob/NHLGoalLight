@@ -168,9 +168,50 @@ let tvClock = {
   secondsRemaining: 0,
   running: false,
   inIntermission: false,
-  lastTickMs: Date.now(),
-  subsecondAccumulator: 0
+  lastTickMs: Date.now()
 };
+
+let arenaHistory = [];
+
+function recordArenaSnapshot(nowMs, officialSec, isRunning, period, inInterm) {
+  if (typeof officialSec !== 'number' || isNaN(officialSec)) return;
+  if (arenaHistory.length === 0) {
+    arenaHistory.push({ t: nowMs, sec: officialSec, running: isRunning, period: period, inIntermission: inInterm });
+    return;
+  }
+  const last = arenaHistory[arenaHistory.length - 1];
+  if (last.sec !== officialSec || last.running !== isRunning || last.period !== period || last.inIntermission !== inInterm || (nowMs - last.t >= 1000)) {
+    arenaHistory.push({ t: nowMs, sec: officialSec, running: isRunning, period: period, inIntermission: inInterm });
+  }
+  const cutoff = nowMs - 240000;
+  while (arenaHistory.length > 2 && arenaHistory[1].t < cutoff) {
+    arenaHistory.shift();
+  }
+}
+
+function seedArenaHistory(nowMs, officialSec, isRunning, period, inInterm, stoppageSec, stopElapsed, resumeElapsed) {
+  if (arenaHistory.length > 5) return;
+  arenaHistory = [];
+  if (inInterm) {
+    arenaHistory.push({ t: nowMs - 150000, sec: officialSec + 150, running: true, period: period, inIntermission: true });
+    arenaHistory.push({ t: nowMs, sec: officialSec, running: true, period: period, inIntermission: true });
+  } else if (!isRunning) {
+    const sElapsed = (typeof stopElapsed === 'number' && stopElapsed < 9000) ? stopElapsed : 0;
+    const sSec = (typeof stoppageSec === 'number' && stoppageSec >= 0) ? stoppageSec : officialSec;
+    const stopTime = nowMs - (sElapsed * 1000);
+    arenaHistory.push({ t: stopTime - 120000, sec: Math.min(1200, sSec + 120), running: true, period: period, inIntermission: false });
+    arenaHistory.push({ t: stopTime, sec: sSec, running: false, period: period, inIntermission: false });
+    arenaHistory.push({ t: nowMs, sec: sSec, running: false, period: period, inIntermission: false });
+  } else {
+    const rElapsed = (typeof resumeElapsed === 'number' && resumeElapsed < 9000) ? resumeElapsed : 0;
+    const sSec = (typeof stoppageSec === 'number' && stoppageSec >= 0) ? stoppageSec : (officialSec + rElapsed);
+    const resumeTime = nowMs - (rElapsed * 1000);
+    arenaHistory.push({ t: resumeTime - 120000, sec: Math.min(1200, sSec + 120), running: true, period: period, inIntermission: false });
+    arenaHistory.push({ t: resumeTime - 60000, sec: sSec, running: false, period: period, inIntermission: false });
+    arenaHistory.push({ t: resumeTime, sec: sSec, running: true, period: period, inIntermission: false });
+    arenaHistory.push({ t: nowMs, sec: officialSec, running: true, period: period, inIntermission: false });
+  }
+}
 
 function parseClockSeconds(str) {
   if (!str || str === '--:--' || str.toLowerCase().indexOf('intermission') >= 0) return 0;
@@ -195,105 +236,70 @@ function getCurOfficialSec() {
 
 function tickTvClock() {
   const now = Date.now();
-  const dt = Math.max(0, Math.min(1.0, (now - tvClock.lastTickMs) / 1000.0));
   tvClock.lastTickMs = now;
-
-  if (!liveClockState.active || !tvClock.initialized) return;
-
-  if (tvClock.running) {
-    tvClock.subsecondAccumulator += dt;
-    while (tvClock.subsecondAccumulator >= 1.0) {
-      if (tvClock.secondsRemaining > 0) {
-        tvClock.secondsRemaining -= 1;
-      }
-      tvClock.subsecondAccumulator -= 1.0;
+  if (!liveClockState.active) return;
+  
+  const curOfficial = getCurOfficialSec();
+  recordArenaSnapshot(now, curOfficial, liveClockState.running, liveClockState.period, liveClockState.inIntermission);
+  
+  const D = liveClockState.delaySec;
+  if (D <= 0) {
+    tvClock.initialized = true;
+    tvClock.period = liveClockState.period;
+    tvClock.secondsRemaining = curOfficial;
+    tvClock.running = liveClockState.running;
+    tvClock.inIntermission = liveClockState.inIntermission;
+    renderClockDisplays();
+    return;
+  }
+  
+  const targetPastMs = now - (D * 1000);
+  let snap = arenaHistory[0];
+  let snapNext = null;
+  for (let i = arenaHistory.length - 1; i >= 0; i--) {
+    if (arenaHistory[i].t <= targetPastMs) {
+      snap = arenaHistory[i];
+      if (i + 1 < arenaHistory.length) snapNext = arenaHistory[i + 1];
+      break;
     }
   }
-
-  const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
-  const D = liveClockState.delaySec;
-  const userAdjusting = (now - lastUserDelayChange < 8000);
-  const curOfficialSec = getCurOfficialSec();
-
-  if (!tvClock.inIntermission) {
-    if (liveClockState.inIntermission) {
-      if (tvClock.secondsRemaining <= 0) {
-        tvClock.inIntermission = true;
-        tvClock.secondsRemaining = Math.max(0, curOfficialSec + D);
-        tvClock.running = true;
-        tvClock.subsecondAccumulator = 0;
-      } else {
-        tvClock.running = true;
-      }
-    } else if (!liveClockState.running) {
-      const stopSec = (typeof liveClockState.stoppageSeconds === 'number' && liveClockState.stoppageSeconds >= 0)
-        ? liveClockState.stoppageSeconds : curOfficialSec;
-      const stopElapsed = (typeof liveClockState.stoppageElapsed === 'number' && liveClockState.stoppageElapsed < 9000)
-        ? (liveClockState.stoppageElapsed + elapsedSinceSync) : 9999;
-      
-      if (tvClock.secondsRemaining <= stopSec) {
-        tvClock.secondsRemaining = stopSec;
-        tvClock.running = false;
-        tvClock.subsecondAccumulator = 0;
-      } else if (stopElapsed >= D) {
-        tvClock.secondsRemaining = stopSec;
-        tvClock.running = false;
-        tvClock.subsecondAccumulator = 0;
-      } else {
-        if (!tvClock.running) {
-          tvClock.running = true;
-          tvClock.subsecondAccumulator = 0;
-        }
-        if (!userAdjusting) {
-          const expSec = stopSec + (D - stopElapsed);
-          if (Math.abs(tvClock.secondsRemaining - expSec) > 3) {
-            tvClock.secondsRemaining = expSec;
-          }
-        }
-      }
+  
+  if (!snap) return;
+  tvClock.initialized = true;
+  tvClock.period = snap.period;
+  tvClock.inIntermission = snap.inIntermission;
+  
+  if (targetPastMs < snap.t) {
+    const dtOld = (snap.t - targetPastMs) / 1000.0;
+    if (snap.inIntermission) {
+      tvClock.running = true;
+      tvClock.secondsRemaining = Math.max(0, snap.sec + Math.floor(dtOld));
+    } else if (!snap.running) {
+      tvClock.running = false;
+      tvClock.secondsRemaining = snap.sec;
     } else {
-      const resumeElapsed = (typeof liveClockState.resumeElapsed === 'number' && liveClockState.resumeElapsed < 9000)
-        ? (liveClockState.resumeElapsed + elapsedSinceSync) : 9999;
-      
-      if (resumeElapsed >= D) {
-        tvClock.running = true;
-        if (!userAdjusting) {
-          const targetSec = curOfficialSec + D;
-          if (Math.abs(tvClock.secondsRemaining - targetSec) > 3) {
-            tvClock.secondsRemaining = targetSec;
-          }
-        }
-      } else {
-        const stopSec = (typeof liveClockState.stoppageSeconds === 'number' && liveClockState.stoppageSeconds >= 0)
-          ? liveClockState.stoppageSeconds : curOfficialSec;
-        tvClock.secondsRemaining = stopSec;
-        tvClock.running = false;
-        tvClock.subsecondAccumulator = 0;
-      }
+      tvClock.running = true;
+      tvClock.secondsRemaining = Math.min(1200, snap.sec + Math.floor(dtOld));
     }
   } else {
-    if (liveClockState.inIntermission) {
+    const dtSec = Math.max(0, (targetPastMs - snap.t) / 1000.0);
+    if (snap.inIntermission) {
       tvClock.running = true;
-      if (!userAdjusting) {
-        const targetIntermSec = curOfficialSec + D;
-        if (Math.abs(tvClock.secondsRemaining - targetIntermSec) > 3) {
-          tvClock.secondsRemaining = targetIntermSec;
-        }
-      }
+      tvClock.secondsRemaining = Math.max(0, snap.sec - Math.floor(dtSec));
+    } else if (!snap.running) {
+      tvClock.running = false;
+      tvClock.secondsRemaining = snap.sec;
     } else {
-      if (tvClock.secondsRemaining <= 0) {
-        tvClock.inIntermission = false;
-        tvClock.period = liveClockState.period;
-        const initialSec = (typeof liveClockState.officialSeconds === 'number' && liveClockState.officialSeconds > 0) ? liveClockState.officialSeconds : 1200;
-        tvClock.secondsRemaining = initialSec;
+      tvClock.running = true;
+      let rem = snap.sec - Math.floor(dtSec);
+      if (snapNext && !snapNext.running && rem < snapNext.sec) {
+        rem = snapNext.sec;
         tvClock.running = false;
-        tvClock.subsecondAccumulator = 0;
-      } else {
-        tvClock.running = true;
       }
+      tvClock.secondsRemaining = Math.max(0, rem);
     }
   }
-
+  
   renderClockDisplays();
 }
 
@@ -502,25 +508,44 @@ window.applyTvScoreboardMatch = function(source) {
     return;
   }
   const tvTotalSec = (m * 60) + s;
+  const now = Date.now();
   const curOfficial = getCurOfficialSec();
   
-  tvClock.secondsRemaining = tvTotalSec;
-  tvClock.subsecondAccumulator = 0;
+  let calculatedDelay = -1;
+  for (let i = arenaHistory.length - 1; i >= 0; i--) {
+    const snap = arenaHistory[i];
+    const snapNext = (i + 1 < arenaHistory.length) ? arenaHistory[i + 1] : { t: now, sec: curOfficial, running: liveClockState.running };
+    if (!snap.inIntermission) {
+      if (!snap.running) {
+        if (snap.sec === tvTotalSec) {
+          calculatedDelay = Math.round((now - snap.t) / 1000);
+          break;
+        }
+      } else {
+        const endSec = snapNext.running ? Math.max(0, snap.sec - Math.floor((snapNext.t - snap.t) / 1000)) : snapNext.sec;
+        if (tvTotalSec <= snap.sec && tvTotalSec >= endSec) {
+          const matchT = snap.t + (snap.sec - tvTotalSec) * 1000;
+          calculatedDelay = Math.round((now - matchT) / 1000);
+          break;
+        }
+      }
+    }
+  }
   
-  let calculatedDelay = 0;
-  if (liveClockState.running) {
-    calculatedDelay = tvTotalSec - curOfficial;
-  } else {
-    const now = Date.now();
-    const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
-    const stopElapsed = (typeof liveClockState.stoppageElapsed === 'number' && liveClockState.stoppageElapsed < 9000)
-      ? (liveClockState.stoppageElapsed + elapsedSinceSync) : 0;
-    const stopSec = (typeof liveClockState.stoppageSeconds === 'number' && liveClockState.stoppageSeconds >= 0)
-      ? liveClockState.stoppageSeconds : curOfficial;
-    if (tvTotalSec >= stopSec) {
-      calculatedDelay = stopElapsed + (tvTotalSec - stopSec);
+  if (calculatedDelay < 0) {
+    if (liveClockState.running) {
+      calculatedDelay = tvTotalSec - curOfficial;
     } else {
-      calculatedDelay = stopElapsed;
+      const elapsedSinceSync = Math.max(0, Math.floor((now - liveClockState.lastSyncTime) / 1000));
+      const stopElapsed = (typeof liveClockState.stoppageElapsed === 'number' && liveClockState.stoppageElapsed < 9000)
+        ? (liveClockState.stoppageElapsed + elapsedSinceSync) : 0;
+      const stopSec = (typeof liveClockState.stoppageSeconds === 'number' && liveClockState.stoppageSeconds >= 0)
+        ? liveClockState.stoppageSeconds : curOfficial;
+      if (tvTotalSec >= stopSec) {
+        calculatedDelay = stopElapsed + (tvTotalSec - stopSec);
+      } else {
+        calculatedDelay = stopElapsed;
+      }
     }
   }
   
@@ -528,12 +553,14 @@ window.applyTvScoreboardMatch = function(source) {
   if (calculatedDelay > 120) calculatedDelay = 120;
   
   sendQuickDelay(calculatedDelay);
+  liveClockState.delaySec = calculatedDelay;
+  tickTvClock();
+  
   const tvM = Math.floor(tvTotalSec / 60);
   const tvS = tvTotalSec % 60;
   const tvStr = `${tvM}:${tvS < 10 ? '0' : ''}${tvS}`;
   if (resEl) resEl.innerHTML = `<span style="color:#4ade80;">🎯 TV Clock set to ${tvStr} • Broadcast delay set to ${calculatedDelay}s!</span>`;
   showToast(`🎯 TV Matched to ${tvStr}! Delay: ${calculatedDelay}s`);
-  renderClockDisplays();
 };
 
 window.syncWhistleOnTv = function() {
@@ -547,17 +574,15 @@ window.syncWhistleOnTv = function() {
     return;
   }
   sendQuickDelay(stopElapsed);
+  liveClockState.delaySec = stopElapsed;
+  tickTvClock();
   const stopSec = (typeof liveClockState.stoppageSeconds === 'number' && liveClockState.stoppageSeconds >= 0)
     ? liveClockState.stoppageSeconds : getCurOfficialSec();
-  tvClock.secondsRemaining = stopSec;
-  tvClock.running = false;
-  tvClock.subsecondAccumulator = 0;
   const m = Math.floor(stopSec / 60);
   const s = stopSec % 60;
   const sStr = `${m}:${s < 10 ? '0' : ''}${s}`;
   if (resEl) resEl.innerHTML = `<span style="color:#4ade80;">🎯 Whistle synchronised! Clock paused at ${sStr} • Delay: ${stopElapsed}s</span>`;
   showToast(`🎯 Whistle Synced at ${sStr}! Delay: ${stopElapsed}s`);
-  renderClockDisplays();
 };
 
 window.syncPuckDropOnTv = function() {
@@ -571,14 +596,10 @@ window.syncPuckDropOnTv = function() {
     return;
   }
   sendQuickDelay(resumeElapsed);
-  const stopSec = (typeof liveClockState.stoppageSeconds === 'number' && liveClockState.stoppageSeconds >= 0)
-    ? liveClockState.stoppageSeconds : getCurOfficialSec();
-  tvClock.secondsRemaining = stopSec;
-  tvClock.running = true;
-  tvClock.subsecondAccumulator = 0;
+  liveClockState.delaySec = resumeElapsed;
+  tickTvClock();
   if (resEl) resEl.innerHTML = `<span style="color:#4ade80;">🎯 Faceoff synchronised! Clock resumed • Delay: ${resumeElapsed}s</span>`;
   showToast(`🎯 Faceoff Synced! Delay: ${resumeElapsed}s`);
-  renderClockDisplays();
 };
 
 let lastUserDelayChange = 0;
@@ -605,12 +626,8 @@ function onSliderInput(slider) {
   const v = parseInt(slider.value) || 0;
   lastUserDelayChange = Date.now();
   updateDelayDisplays(v);
-  if (tvClock.initialized) {
-    const curOff = getCurOfficialSec();
-    tvClock.secondsRemaining = Math.max(0, curOff + v);
-    tvClock.subsecondAccumulator = 0;
-  }
-  renderClockDisplays();
+  liveClockState.delaySec = v;
+  tickTvClock();
 }
 
 if (liveDelaySlider) {
@@ -623,13 +640,9 @@ if (delaySlider) {
 }
 
 window.quickSetPreset = (sec) => {
-  if (tvClock.initialized) {
-    const curOff = getCurOfficialSec();
-    tvClock.secondsRemaining = Math.max(0, curOff + sec);
-    tvClock.subsecondAccumulator = 0;
-  }
   sendQuickDelay(sec);
-  renderClockDisplays();
+  liveClockState.delaySec = sec;
+  tickTvClock();
 };
 window.setBroadcastPreset = window.quickSetPreset;
 window.quickNudgeDelay = (delta) => {
@@ -637,23 +650,8 @@ window.quickNudgeDelay = (delta) => {
   const curD = (typeof liveClockState.delaySec === 'number') ? liveClockState.delaySec : (parseInt(liveDelaySlider ? liveDelaySlider.value : 0) || 0);
   const newD = Math.max(0, Math.min(120, curD + delta));
   sendQuickDelay(newD);
-  if (tvClock.initialized) {
-    const curOff = getCurOfficialSec();
-    if (tvClock.inIntermission) {
-      tvClock.secondsRemaining = Math.max(0, curOff + newD);
-      tvClock.running = true;
-    } else if (liveClockState.running) {
-      tvClock.secondsRemaining = Math.max(0, curOff + newD);
-    } else {
-      const stopSec = (typeof liveClockState.stoppageSeconds === 'number' && liveClockState.stoppageSeconds >= 0) ? liveClockState.stoppageSeconds : curOff;
-      const elapsed = Math.max(0, Math.floor((Date.now() - liveClockState.lastSyncTime) / 1000));
-      const stopEl = (typeof liveClockState.stoppageElapsed === 'number' && liveClockState.stoppageElapsed < 9000) ? (liveClockState.stoppageElapsed + elapsed) : 9999;
-      tvClock.running = (stopEl < newD);
-      tvClock.secondsRemaining = tvClock.running ? Math.max(stopSec, stopSec + (newD - stopEl)) : stopSec;
-    }
-    tvClock.subsecondAccumulator = 0;
-    renderClockDisplays();
-  }
+  liveClockState.delaySec = newD;
+  tickTvClock();
 };
 window.nudgeDelay = window.quickNudgeDelay;
 const activeDrawers = {
@@ -1141,64 +1139,16 @@ liveClockState.resumeElapsed = (typeof s.game.resumeElapsed !== 'undefined') ? s
 liveClockState.stoppageSeconds = (typeof s.game.stoppageSeconds !== 'undefined') ? s.game.stoppageSeconds : newOfficialSec;
 liveClockState.lastSyncTime = Date.now();
 
+const nowSync = Date.now();
 if (!tvClock.initialized) {
-  if (s.game && s.game.state === 'LIVE' && s.game.timeRemaining && s.game.timeRemaining !== '--:--' && s.game.period > 0) {
-    tvClock.initialized = true;
-    tvClock.period = newPeriod;
-    tvClock.inIntermission = isIntermission;
+  if (s.game && (s.game.state === 'LIVE' || s.game.state === 'CRIT' || s.game.inIntermission) && s.game.timeRemaining && s.game.timeRemaining !== '--:--') {
     const initialDelay = (typeof s.game.broadcastDelay === 'number') ? s.game.broadcastDelay : 0;
     liveClockState.delaySec = initialDelay;
-    tvClock.lastTickMs = Date.now();
-    if (isIntermission) {
-      tvClock.running = true;
-      tvClock.secondsRemaining = newOfficialSec + initialDelay;
-    } else if (!isRunning) {
-      const stopSec = (typeof s.game.stoppageSeconds === 'number' && s.game.stoppageSeconds >= 0) ? s.game.stoppageSeconds : newOfficialSec;
-      const stopElapsed = (typeof s.game.stoppageElapsed === 'number') ? s.game.stoppageElapsed : 9999;
-      if (stopElapsed >= initialDelay) {
-        tvClock.secondsRemaining = stopSec;
-        tvClock.running = false;
-      } else {
-        tvClock.secondsRemaining = stopSec + (initialDelay - stopElapsed);
-        tvClock.running = true;
-      }
-    } else {
-      const resumeElapsed = (typeof s.game.resumeElapsed === 'number') ? s.game.resumeElapsed : 9999;
-      if (resumeElapsed >= initialDelay) {
-        tvClock.secondsRemaining = Math.max(0, newOfficialSec + initialDelay);
-        tvClock.running = true;
-      } else {
-        const stopSec = (typeof s.game.stoppageSeconds === 'number' && s.game.stoppageSeconds >= 0) ? s.game.stoppageSeconds : newOfficialSec;
-        tvClock.secondsRemaining = stopSec;
-        tvClock.running = false;
-      }
-    }
-  }
-} else if (periodChanged) {
-  if (!tvClock.inIntermission || tvClock.secondsRemaining <= 0) {
-    tvClock.period = newPeriod;
-    tvClock.secondsRemaining = newOfficialSec + (isRunning ? liveClockState.delaySec : 0);
-    tvClock.running = isRunning;
-    tvClock.inIntermission = isIntermission;
-    tvClock.subsecondAccumulator = 0;
-  }
-} else if (tvClock.inIntermission !== isIntermission) {
-  if (isIntermission) {
-    if (tvClock.secondsRemaining <= 0 || liveClockState.delaySec <= 0) {
-      tvClock.inIntermission = true;
-      tvClock.secondsRemaining = newOfficialSec + liveClockState.delaySec;
-      tvClock.running = true;
-      tvClock.subsecondAccumulator = 0;
-    }
-  } else {
-    if (tvClock.secondsRemaining <= 0 || liveClockState.delaySec <= 0) {
-      tvClock.inIntermission = false;
-      tvClock.secondsRemaining = newOfficialSec;
-      tvClock.running = isRunning;
-      tvClock.subsecondAccumulator = 0;
-    }
+    seedArenaHistory(nowSync, newOfficialSec, isRunning, newPeriod, isIntermission, liveClockState.stoppageSeconds, liveClockState.stoppageElapsed, liveClockState.resumeElapsed);
+    tvClock.initialized = true;
   }
 }
+recordArenaSnapshot(nowSync, newOfficialSec, isRunning, newPeriod, isIntermission);
 
 const userInteracting = (document.activeElement === liveDelaySlider || document.activeElement === delaySlider);
 if (!userInteracting && (Date.now() - lastUserDelayChange > 8000)) {
@@ -1209,7 +1159,7 @@ if (!userInteracting && (Date.now() - lastUserDelayChange > 8000)) {
   liveClockState.delaySec = parseInt(liveDelaySlider ? liveDelaySlider.value : (delaySlider ? delaySlider.value : 0)) || 0;
 }
 
-renderClockDisplays();
+tickTvClock();
 const interm = !!s.game.inIntermission;
 document.getElementById('liveIntermissionNote').style.display = interm ? 'inline' : 'none';
 document.getElementById('liveStatusSubtext').textContent = interm ? 'Intermission in progress.' : (s.game.running ? 'Live play in progress.' : 'Play stopped by whistle.');

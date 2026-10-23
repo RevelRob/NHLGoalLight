@@ -1,6 +1,6 @@
 {
   "name": "NHL Goal Light",
-  "version": "1.1.0.23-beta",
+  "version": "1.1.0.24-beta",
   "home_assistant_domain": "esphome",
   "new_install_prompt_erase": true,
   "builds": [

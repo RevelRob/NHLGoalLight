@@ -44,6 +44,7 @@ unsigned long scheduledRestartTime = 0;
 // TV Broadcast Delay Celebration Queue
 unsigned long pendingGoalCelebrationTime = 0;
 unsigned long pendingOpponentGoalTime = 0;
+unsigned long pendingPeriodActionTime = 0;
 
 // =====================================================
 // FORWARD DECLARATIONS
@@ -56,6 +57,7 @@ void handleButton(unsigned long now);
 void triggerGoalCelebration();
 void triggerOpponentGoal();
 void triggerGameWin();
+void triggerPeriodAction();
 
 void generateHostname(const char* name, char* out, size_t maxLen) {
   if (name == nullptr || strlen(name) == 0) {
@@ -224,7 +226,6 @@ void loop() {
                   isApMode ? "192.168.4.1" : WiFi.localIP().toString().c_str());
   }
 
-  // Check buffered TV broadcast delay celebration
   if (pendingGoalCelebrationTime > 0 && now >= pendingGoalCelebrationTime) {
     pendingGoalCelebrationTime = 0;
     triggerGoalCelebration();
@@ -232,6 +233,10 @@ void loop() {
   if (pendingOpponentGoalTime > 0 && now >= pendingOpponentGoalTime) {
     pendingOpponentGoalTime = 0;
     triggerOpponentGoal();
+  }
+  if (pendingPeriodActionTime > 0 && now >= pendingPeriodActionTime) {
+    pendingPeriodActionTime = 0;
+    triggerPeriodAction();
   }
 
   // 6. If celebrating or in AP mode, skip live polling
@@ -302,13 +307,12 @@ void loop() {
   }
 
   if (periodStart && config.alert_period_buzzer) {
-    if (config.hw_speaker_enabled && config.alert_period_buzzer_sound) {
-      audio.play(TRACK_PERIOD_HORN);
+    if (config.broadcast_delay_sec == 0) {
+      triggerPeriodAction();
+    } else {
+      pendingPeriodActionTime = millis() + ((unsigned long)config.broadcast_delay_sec * 1000UL);
+      eventLog.log("[PERIOD] Buzzer delayed %ds for TV", config.broadcast_delay_sec);
     }
-    if (config.hw_lights_enabled) {
-      leds.setMode(LED_STROBE_GOAL, 2500);
-    }
-    eventLog.log("[PERIOD] Arena Buzzer / Period Action");
   }
 }
 
@@ -358,6 +362,17 @@ void triggerGameWin() {
     }
     leds.setMode(mode, 20000);
   }
+}
+
+void triggerPeriodAction() {
+  Serial.println("[Event] Arena Buzzer / Period Action!");
+  if (config.hw_speaker_enabled && config.alert_period_buzzer_sound) {
+    audio.play(TRACK_PERIOD_HORN);
+  }
+  if (config.hw_lights_enabled) {
+    leds.setMode(LED_STROBE_GOAL, 2500);
+  }
+  eventLog.log("[PERIOD] Arena Buzzer / Period Action");
 }
 
 // =====================================================

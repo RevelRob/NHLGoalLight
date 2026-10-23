@@ -496,9 +496,9 @@ private:
         }
       } else {
         currentStatus.state = STATE_FINAL;
+        winCelebrated = true;
       }
-    }
-    if (currentStatus.state != STATE_FINAL) {
+    } else {
       finalDetectedMillis = 0;
       winCelebrated = false;
     }
@@ -632,6 +632,9 @@ private:
             // Transitioned into intermission: snap to intermission timer
             currentStatus.secondsRemaining = sec;
             lastClockTick = millis();
+            if (!wasInterm && currentStatus.period >= 1) {
+              outPeriodStart = true;
+            }
           } else if (sec < currentStatus.secondsRemaining && (currentStatus.secondsRemaining - sec > 3)) {
             // Strictly monotonic countdown during continuing intermission
             currentStatus.secondsRemaining = sec;
