@@ -216,7 +216,16 @@ function tickTvClock() {
   const curOfficialSec = getCurOfficialSec();
 
   if (!tvClock.inIntermission) {
-    if (!liveClockState.running) {
+    if (liveClockState.inIntermission) {
+      if (tvClock.secondsRemaining <= 0) {
+        tvClock.inIntermission = true;
+        tvClock.secondsRemaining = Math.max(0, curOfficialSec + D);
+        tvClock.running = true;
+        tvClock.subsecondAccumulator = 0;
+      } else {
+        tvClock.running = true;
+      }
+    } else if (!liveClockState.running) {
       const stopSec = (typeof liveClockState.stoppageSeconds === 'number' && liveClockState.stoppageSeconds >= 0)
         ? liveClockState.stoppageSeconds : curOfficialSec;
       const stopElapsed = (typeof liveClockState.stoppageElapsed === 'number' && liveClockState.stoppageElapsed < 9000)
@@ -260,6 +269,27 @@ function tickTvClock() {
         tvClock.secondsRemaining = stopSec;
         tvClock.running = false;
         tvClock.subsecondAccumulator = 0;
+      }
+    }
+  } else {
+    if (liveClockState.inIntermission) {
+      tvClock.running = true;
+      if (!userAdjusting) {
+        const targetIntermSec = curOfficialSec + D;
+        if (Math.abs(tvClock.secondsRemaining - targetIntermSec) > 3) {
+          tvClock.secondsRemaining = targetIntermSec;
+        }
+      }
+    } else {
+      if (tvClock.secondsRemaining <= 0) {
+        tvClock.inIntermission = false;
+        tvClock.period = liveClockState.period;
+        const initialSec = (typeof liveClockState.officialSeconds === 'number' && liveClockState.officialSeconds > 0) ? liveClockState.officialSeconds : 1200;
+        tvClock.secondsRemaining = initialSec;
+        tvClock.running = false;
+        tvClock.subsecondAccumulator = 0;
+      } else {
+        tvClock.running = true;
       }
     }
   }
@@ -609,7 +639,10 @@ window.quickNudgeDelay = (delta) => {
   sendQuickDelay(newD);
   if (tvClock.initialized) {
     const curOff = getCurOfficialSec();
-    if (liveClockState.running) {
+    if (tvClock.inIntermission) {
+      tvClock.secondsRemaining = Math.max(0, curOff + newD);
+      tvClock.running = true;
+    } else if (liveClockState.running) {
       tvClock.secondsRemaining = Math.max(0, curOff + newD);
     } else {
       const stopSec = (typeof liveClockState.stoppageSeconds === 'number' && liveClockState.stoppageSeconds >= 0) ? liveClockState.stoppageSeconds : curOff;
@@ -1034,6 +1067,12 @@ const badge = document.getElementById('statusBadge');
 if (s.system && s.system.deviceName) {
 document.getElementById('titleDeviceName').textContent = '🚨 ' + s.system.deviceName;
 }
+if (s.system && s.system.team) {
+if (liveClockState.trackedTeam && liveClockState.trackedTeam !== s.system.team) {
+tvClock.initialized = false;
+}
+liveClockState.trackedTeam = s.system.team;
+}
 if (!userNavigated && s.system && s.system.isApMode) {
 switchTab('system');
 }
@@ -1112,7 +1151,7 @@ if (!tvClock.initialized) {
     tvClock.lastTickMs = Date.now();
     if (isIntermission) {
       tvClock.running = true;
-      tvClock.secondsRemaining = newOfficialSec;
+      tvClock.secondsRemaining = newOfficialSec + initialDelay;
     } else if (!isRunning) {
       const stopSec = (typeof s.game.stoppageSeconds === 'number' && s.game.stoppageSeconds >= 0) ? s.game.stoppageSeconds : newOfficialSec;
       const stopElapsed = (typeof s.game.stoppageElapsed === 'number') ? s.game.stoppageElapsed : 9999;
@@ -1136,16 +1175,29 @@ if (!tvClock.initialized) {
     }
   }
 } else if (periodChanged) {
-  tvClock.period = newPeriod;
-  tvClock.secondsRemaining = newOfficialSec;
-  tvClock.running = isRunning;
-  tvClock.inIntermission = isIntermission;
-  tvClock.subsecondAccumulator = 0;
+  if (!tvClock.inIntermission || tvClock.secondsRemaining <= 0) {
+    tvClock.period = newPeriod;
+    tvClock.secondsRemaining = newOfficialSec + (isRunning ? liveClockState.delaySec : 0);
+    tvClock.running = isRunning;
+    tvClock.inIntermission = isIntermission;
+    tvClock.subsecondAccumulator = 0;
+  }
 } else if (tvClock.inIntermission !== isIntermission) {
-  tvClock.inIntermission = isIntermission;
-  tvClock.secondsRemaining = newOfficialSec;
-  tvClock.running = isIntermission || isRunning;
-  tvClock.subsecondAccumulator = 0;
+  if (isIntermission) {
+    if (tvClock.secondsRemaining <= 0 || liveClockState.delaySec <= 0) {
+      tvClock.inIntermission = true;
+      tvClock.secondsRemaining = newOfficialSec + liveClockState.delaySec;
+      tvClock.running = true;
+      tvClock.subsecondAccumulator = 0;
+    }
+  } else {
+    if (tvClock.secondsRemaining <= 0 || liveClockState.delaySec <= 0) {
+      tvClock.inIntermission = false;
+      tvClock.secondsRemaining = newOfficialSec;
+      tvClock.running = isRunning;
+      tvClock.subsecondAccumulator = 0;
+    }
+  }
 }
 
 const userInteracting = (document.activeElement === liveDelaySlider || document.activeElement === delaySlider);
